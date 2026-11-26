@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BsTable,
@@ -178,14 +178,26 @@ const CategoryTreeNode = ({ node, onView, onEdit, onDelete }) => {
 const CategoryManagement = () => {
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isViewMode, setIsViewMode] = useState(false);
+  const [modalInitialTab, setModalInitialTab] = useState("details");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Pagination & Page Size (Issue 4)
   const [currentPage, setCurrentPage] = useState(1);
@@ -253,18 +265,32 @@ const CategoryManagement = () => {
   };
 
   /* =========================================================
-     LOAD CATEGORIES
+     LOAD CATEGORIES (Server-side search & status filter)
   ========================================================= */
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      // Fetch both categories and products in parallel to calculate accurate product counts per category
-      const [catResponse, prodResponse] = await Promise.allSettled([
-        category.getAll(),
+      const queryParams = {};
+      const trimmedSearch = debouncedSearch.trim();
+      if (trimmedSearch) {
+        queryParams.search = trimmedSearch;
+      }
+      if (statusFilter === "Active") {
+        queryParams.is_active = true;
+      } else if (statusFilter === "Inactive") {
+        queryParams.is_active = false;
+      }
+
+      const isFiltered = Boolean(trimmedSearch || (statusFilter !== "All" && statusFilter !== "Products"));
+
+      // Fetch filtered categories, product list, and full categories (for baseline KPI cards) in parallel
+      const [catResponse, prodResponse, allCatsResponse] = await Promise.allSettled([
+        category.getAll(queryParams),
         productService.getAll(1, 1000, true),
+        isFiltered ? category.getAll() : Promise.resolve(null),
       ]);
 
       const response = catResponse.status === "fulfilled" ? catResponse.value : { data: [] };
@@ -287,15 +313,42 @@ const CategoryManagement = () => {
         }
       });
 
-      console.log(
-        "🔥 Categories API Response:",
-        response
-      );
+      const mapCategoryItem = (item) => {
+        let status = normalizeStatus(
+          item.status ??
+            item.category_status ??
+            item.is_active ??
+            item.active
+        );
 
-      console.log(
-        "🔥 Categories DATA:",
-        response.data
-      );
+        const productCount = productCountsByCat[item.id] !== undefined
+          ? productCountsByCat[item.id]
+          : getProductCount(item);
+
+        if (!status) {
+          status = "active";
+        }
+
+        return {
+          id: item.id,
+          name: formatCategoryName(item.name),
+          products: productCount,
+          status: status === "active" ? "Active" : "Inactive",
+          created: item.created_at
+            ? new Date(item.created_at).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })
+            : "-",
+          description:
+            item.description ??
+            item.category_description ??
+            item.desc ??
+            "",
+          parent_id: item.parent_id ?? null,
+        };
+      };
 
       const apiData = Array.isArray(response.data)
         ? response.data
@@ -305,153 +358,65 @@ const CategoryManagement = () => {
         ? response.data.items
         : [];
 
-      const apiCategories = apiData.map((item) => {
-        /*
-         * Backend may provide status through different fields.
-         */
-        let status = normalizeStatus(
-          item.status ??
-            item.category_status ??
-            item.is_active ??
-            item.active
-        );
+      let apiCategories = apiData.map(mapCategoryItem);
 
-        /*
-         * Get product count from products API or available backend fields.
-         */
-        const productCount = productCountsByCat[item.id] !== undefined
-          ? productCountsByCat[item.id]
-          : getProductCount(item);
-
-        /*
-         * If backend does not send explicit status,
-         * derive status from product count.
-         */
-     
-if (!status) {
-  status = "active";
-}
-        /*
-         * Inactive category must display 0 products.
-         */
-     const displayProducts = productCount;
-
-        return {
-          id: item.id,
-          name: formatCategoryName(item.name),
-
-          products: displayProducts,
-
-          status:
-            status === "active"
-              ? "Active"
-              : "Inactive",
-
-          created: item.created_at
-            ? new Date(
-                item.created_at
-              ).toLocaleDateString(
-                "en-GB",
-                {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                }
-              )
-            : "-",
-
-          description:
-            item.description ??
-            item.category_description ??
-            item.desc ??
-            "",
-
-          parent_id:
-            item.parent_id ?? null,
-        };
-      });
-
-      console.log(
-        "✅ Mapped Categories:",
-        apiCategories
-      );
-
-      setCategories((previousCategories) =>
-        apiCategories.map((apiCat) => {
-          const prev = previousCategories.find((p) => p.id === apiCat.id);
-          return {
-            ...apiCat,
-            description: apiCat.description || (prev?.description || ""),
-          };
-        })
-      );
-
-      /* =====================================================
-         KEEP PAGINATION VALID
-      ===================================================== */
-
-      const newTotalPages =
-        Math.ceil(
-          apiCategories.length / (pageSize || DEFAULT_PAGE_SIZE)
-        ) || 1;
-
-      setCurrentPage((previousPage) =>
-        Math.min(
-          previousPage,
-          newTotalPages
-        )
-      );
-    } catch (error) {
-      console.error(
-        "❌ Failed to load categories:",
-        error
-      );
-
-      if (error.response) {
-        console.error(
-          "❌ API Error Response:",
-          error.response.data
-        );
+      if (statusFilter === "Products") {
+        apiCategories = apiCategories.filter((item) => Number(item.products) > 0);
       }
 
-      setError(
-        "Failed to load categories. Please try again."
+      setCategories(apiCategories);
+
+      if (!isFiltered) {
+        setAllCategories(apiCategories);
+      } else if (allCatsResponse.status === "fulfilled" && allCatsResponse.value) {
+        const allData = Array.isArray(allCatsResponse.value.data)
+          ? allCatsResponse.value.data
+          : Array.isArray(allCatsResponse.value.data?.data)
+          ? allCatsResponse.value.data.data
+          : Array.isArray(allCatsResponse.value.data?.items)
+          ? allCatsResponse.value.data.items
+          : [];
+        setAllCategories(allData.map(mapCategoryItem));
+      }
+
+      const newTotalPages =
+        Math.ceil(apiCategories.length / (pageSize || DEFAULT_PAGE_SIZE)) || 1;
+
+      setCurrentPage((previousPage) =>
+        Math.min(previousPage, newTotalPages)
       );
+    } catch (error) {
+      console.error("❌ Failed to load categories:", error);
+      if (error.response) {
+        console.error("❌ API Error Response:", error.response.data);
+      }
+      setError("Failed to load categories. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, statusFilter, pageSize]);
 
   /* =========================================================
-     INITIAL LOAD
+     LOAD CATEGORIES ON FILTER / SEARCH / PAGE SIZE CHANGE
   ========================================================= */
 
   useEffect(() => {
     loadCategories();
-  }, []);
+  }, [loadCategories]);
 
   /* =========================================================
-     FILTER
+     FILTERED CATEGORIES (Backend-driven)
   ========================================================= */
 
-  const filteredCategories =
-    statusFilter === "All"
-      ? categories
-      : statusFilter === "Products"
-      ? categories.filter((item) => Number(item.products) > 0)
-      : categories.filter(
-          (item) =>
-            item.status?.toLowerCase() ===
-            statusFilter.toLowerCase()
-        );
+  const filteredCategories = categories;
 
   /* =========================================================
-     RESET PAGE WHEN FILTER CHANGES
+     RESET PAGE WHEN FILTER OR SEARCH CHANGES
   ========================================================= */
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, debouncedSearch]);
 
   /* =========================================================
      PAGINATION
@@ -523,7 +488,8 @@ if (!status) {
       if (statusFilter === "Products") {
         setStatusFilter("All");
       } else {
-        const hasProducts = categories.some((c) => Number(c.products) > 0);
+        const pool = allCategories.length > 0 ? allCategories : categories;
+        const hasProducts = pool.some((c) => Number(c.products) > 0);
         if (hasProducts) {
           setStatusFilter("Products");
         } else {
@@ -534,23 +500,54 @@ if (!status) {
   };
 
   /* =========================================================
-     EXPORT HANDLER (Requirement 29: GET /api/v1/categories/export)
+     EXPORT HANDLER (GET /api/v1/categories/export - CSV & Excel)
+     Backend contract requires: format ('csv'|'excel'), is_active ('all'|'true'|'false')
   ========================================================= */
 
-  const handleExport = async () => {
+  const handleExport = async (format = "csv") => {
     if (isExporting) return;
-    if (!categories || categories.length === 0) {
+    const pool = allCategories.length > 0 ? allCategories : categories;
+    if (!pool || pool.length === 0) {
       notificationService.warning("No categories available to export");
       return;
     }
 
+    const exportFormat = format === "excel" ? "excel" : "csv";
+
     try {
       setIsExporting(true);
-      const res = await category.export({ format: "csv" });
+
+      const exportParams = {
+        format: exportFormat,
+        is_active: statusFilter === "Active" ? "true" : statusFilter === "Inactive" ? "false" : "all",
+      };
+
+      const trimmedSearch = (searchTerm || "").trim();
+      if (trimmedSearch && /[a-zA-Z0-9]/.test(trimmedSearch)) {
+        exportParams.search = trimmedSearch;
+      }
+
+      const res = await category.export(exportParams);
+
+      const mimeType = exportFormat === "excel"
+        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        : "text/csv;charset=utf-8;";
+
       const blob = res?.data instanceof Blob
         ? res.data
-        : new Blob([res?.data || ""], { type: "text/csv;charset=utf-8;" });
-      const filename = `categories_${new Date().toISOString().slice(0, 10)}.csv`;
+        : new Blob([res?.data || ""], { type: mimeType });
+
+      // Extract filename from Content-Disposition header if available
+      const ext = exportFormat === "excel" ? "xlsx" : "csv";
+      let filename = `categories_export_${new Date().toISOString().slice(0, 10)}.${ext}`;
+      const disposition = res?.headers?.["content-disposition"] || res?.headers?.["Content-Disposition"];
+      if (disposition && disposition.includes("filename=")) {
+        const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, "").trim();
+        }
+      }
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -559,19 +556,34 @@ if (!status) {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      notificationService.success("Categories exported successfully!");
+      notificationService.success(`Categories (${exportFormat.toUpperCase()}) exported successfully!`);
     } catch (exportErr) {
       console.error("Backend category export error:", exportErr);
-      const status = exportErr?.response?.status;
       let errorMsg = "Failed to export categories.";
-      if (status === 422) {
-        errorMsg = "Export failed (HTTP 422): Backend endpoint /categories/export is matched by /{category_id} integer validator. Please ensure the backend defines @router.get('/export') before /{category_id}.";
+
+      if (exportErr?.response?.data instanceof Blob) {
+        try {
+          const text = await exportErr.response.data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.detail) {
+            errorMsg = typeof parsed.detail === "string"
+              ? parsed.detail
+              : Array.isArray(parsed.detail)
+              ? parsed.detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
+              : JSON.stringify(parsed.detail);
+          } else if (parsed?.message) {
+            errorMsg = parsed.message;
+          }
+        } catch {
+          // ignore parsing error and keep errorMsg
+        }
       } else if (exportErr?.response?.data?.message || exportErr?.response?.data?.detail) {
         const detail = exportErr.response.data.detail || exportErr.response.data.message;
         errorMsg = typeof detail === "string" ? detail : JSON.stringify(detail);
       } else if (exportErr?.message) {
         errorMsg = exportErr.message;
       }
+
       notificationService.error(errorMsg);
     } finally {
       setIsExporting(false);
@@ -579,29 +591,34 @@ if (!status) {
   };
 
   /* =========================================================
-     VIEW
+     VIEW (GET /api/v1/categories/{category_id})
   ========================================================= */
 
-  const handleView = async (item) => {
-    console.log(
-      "👁️ Viewing Category:",
-      item
-    );
+  const handleView = async (item, initialTab = "details") => {
+    console.log("👁️ Viewing Category:", item);
 
     setSelectedCategory(item);
     setIsViewMode(true);
+    setModalInitialTab(initialTab);
     setShowModal(true);
 
     if (item?.id) {
       try {
-        const prodRes = await category.getProducts(item.id);
-        const prodData = prodRes?.data?.data || prodRes?.data?.items || prodRes?.data || [];
-        const count = typeof prodRes?.data?.total === "number"
-          ? prodRes.data.total
-          : (Array.isArray(prodData) ? prodData.length : (item.products ?? 0));
-        setSelectedCategory((prev) => (prev && prev.id === item.id ? { ...prev, products: count } : prev));
+        const detailRes = await category.getById(item.id);
+        const detail = detailRes?.data?.data || detailRes?.data;
+        if (detail && detail.id) {
+          setSelectedCategory((prev) => ({
+            ...prev,
+            ...detail,
+            name: formatCategoryName(detail.name || prev?.name),
+            status: detail.is_active !== false ? "Active" : "Inactive",
+            products: detail.product_count ?? prev?.products ?? 0,
+            parent_name: detail.parent_name || prev?.parent_name,
+            subcategories_count: detail.subcategory_count ?? 0,
+          }));
+        }
       } catch (viewErr) {
-        console.warn("Could not load products for category view:", viewErr);
+        console.warn("Could not load full category details:", viewErr);
       }
     }
   };
@@ -613,26 +630,44 @@ if (!status) {
   const handleAdd = () => {
     setSelectedCategory(null);
     setIsViewMode(false);
+    setModalInitialTab("details");
     setShowModal(true);
   };
 
   /* =========================================================
-     EDIT
+     EDIT (GET /api/v1/categories/{category_id})
   ========================================================= */
 
-  const handleEdit = (item) => {
-    console.log(
-      "✏️ Editing Category:",
-      item
-    );
+  const handleEdit = async (item) => {
+    console.log("✏️ Editing Category:", item);
 
     setSelectedCategory(item);
     setIsViewMode(false);
+    setModalInitialTab("details");
     setShowModal(true);
+
+    if (item?.id) {
+      try {
+        const detailRes = await category.getById(item.id);
+        const detail = detailRes?.data?.data || detailRes?.data;
+        if (detail && detail.id) {
+          setSelectedCategory((prev) => ({
+            ...prev,
+            ...detail,
+            name: formatCategoryName(detail.name || prev?.name),
+            status: detail.is_active !== false ? "Active" : "Inactive",
+            description: detail.description ?? prev?.description ?? "",
+            parent_id: detail.parent_id ?? prev?.parent_id ?? null,
+          }));
+        }
+      } catch (err) {
+        console.warn("Could not fetch fresh details for category edit:", err);
+      }
+    }
   };
 
   /* =========================================================
-     DELETE
+     DELETE (DELETE /api/v1/categories/{category_id})
   ========================================================= */
 
   const handleDelete = async (item) => {
@@ -652,132 +687,138 @@ if (!status) {
       setLoading(true);
       setError("");
 
-      console.log(
-        "🗑️ Deleting Category ID:",
-        item.id
-      );
+      console.log("🗑️ Deleting Category ID:", item.id);
 
       await category.delete(item.id);
-      notificationService.success(`Category "${item.name || 'Category'}" deleted successfully.`);
+      notificationService.success(`Category "${formatCategoryName(item.name) || 'Category'}" deleted successfully.`);
 
       await loadCategories();
 
-      if (
-        selectedCategory?.id === item.id
-      ) {
+      if (selectedCategory?.id === item.id) {
         setSelectedCategory(null);
         setShowModal(false);
       }
     } catch (error) {
-      console.error(
-        "❌ Delete Category Error:",
-        error
-      );
+      console.error("❌ Delete Category Error:", error);
 
-      const errorMsg =
-        error?.response?.data?.detail ||
-        error?.response?.data?.message ||
-        "Failed to delete category. Please try again.";
+      let errorMsg = "Failed to delete category. Please try again.";
+      if (error?.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        errorMsg = typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+          ? detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
+          : JSON.stringify(detail);
+      } else if (error?.response?.data?.message) {
+        errorMsg = error.response.data.message;
+      } else if (error?.message) {
+        errorMsg = error.message;
+      }
 
-      notificationService.error(
-        typeof errorMsg === "string" ? errorMsg : "Failed to delete category. Please try again."
-      );
+      notificationService.error(errorMsg);
     } finally {
       setLoading(false);
     }
   };
+
   /* =========================================================
-   CHANGE CATEGORY STATUS
-========================================================= */
+     CHANGE CATEGORY STATUS (PATCH activate / deactivate)
+  ========================================================= */
 
-const handleStatusChange = async (
-  item,
-  nextIsActive
-) => {
-  if (!item?.id) {
-    return;
-  }
+  const handleStatusChange = async (item, nextIsActive) => {
+    if (!item?.id) {
+      return;
+    }
 
-  try {
-    setLoading(true);
-    setError("");
+    // Confirmation dialog before deactivating (Endpoint 11)
+    if (!nextIsActive) {
+      const confirmDeactivate = window.confirm(
+        `Are you sure you want to deactivate "${formatCategoryName(item.name)}"? Products assigned to this category may not be visible in some views.`
+      );
+      if (!confirmDeactivate) {
+        return;
+      }
+    }
 
-    const nextStatus =
-      nextIsActive
-        ? "Active"
-        : "Inactive";
-
-    /*
-     * 1. Call dedicated activate/deactivate API
-     * Fallback to patch / update if direct endpoints fail
-     */
     try {
-      if (typeof category.setActiveStatus === "function") {
-        await category.setActiveStatus(item.id, nextIsActive);
-      } else {
-        await category.update(item.id, { is_active: nextIsActive });
+      setLoading(true);
+      setError("");
+
+      const nextStatus = nextIsActive ? "Active" : "Inactive";
+
+      /*
+       * Call dedicated activate / deactivate API
+       */
+      try {
+        if (nextIsActive) {
+          await category.activate(item.id);
+        } else {
+          await category.deactivate(item.id);
+        }
+      } catch (apiErr) {
+        console.warn("Direct activate/deactivate failed, trying fallback payload update:", apiErr);
+        const fallbackPayload = {
+          name: formatCategoryName(item.name),
+          parent_id: item.parent_id ?? null,
+          is_active: nextIsActive,
+        };
+        if (item.description && typeof item.description === "string" && item.description.trim().length >= 3) {
+          fallbackPayload.description = item.description.trim();
+        }
+        await category.update(item.id, fallbackPayload);
       }
-    } catch (apiErr) {
-      console.warn("Direct activate/deactivate failed, trying fallback payload update:", apiErr);
-      const fallbackPayload = {
-        name: formatCategoryName(item.name),
-        parent_id: item.parent_id ?? null,
-        is_active: nextIsActive,
-      };
-      if (item.description && typeof item.description === "string" && item.description.trim().length >= 3) {
-        fallbackPayload.description = item.description.trim();
+
+      /*
+       * Update local state immediately with the new status
+       */
+      setCategories((previousCategories) =>
+        previousCategories.map((categoryItem) =>
+          categoryItem.id === item.id
+            ? {
+                ...categoryItem,
+                status: nextStatus,
+                is_active: nextIsActive,
+              }
+            : categoryItem
+        )
+      );
+
+      /*
+       * Prevent category from disappearing when viewing a filtered list
+       */
+      if (
+        (statusFilter === "Active" && !nextIsActive) ||
+        (statusFilter === "Inactive" && nextIsActive)
+      ) {
+        setStatusFilter("All");
       }
-      await category.update(item.id, fallbackPayload);
+
+      notificationService.success(
+        `Category "${formatCategoryName(item.name) || 'Category'}" status successfully changed to ${nextStatus}.`
+      );
+    } catch (error) {
+      console.error("Category Status Change Error:", error);
+
+      let errorMsg = "Failed to change category status.";
+      if (error?.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        errorMsg = typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+          ? detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
+          : JSON.stringify(detail);
+      } else if (error?.response?.data?.message) {
+        errorMsg = error.response.data.message;
+      } else if (error?.message) {
+        errorMsg = error.message;
+      }
+
+      notificationService.error(errorMsg);
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
     }
-
-    /*
-     * 2. Update local state immediately with the new status.
-     */
-    setCategories((previousCategories) =>
-      previousCategories.map((categoryItem) =>
-        categoryItem.id === item.id
-          ? {
-              ...categoryItem,
-              status: nextStatus,
-              is_active: nextIsActive,
-            }
-          : categoryItem
-      )
-    );
-
-    /*
-     * 3. Prevent category from disappearing when viewing a filtered list:
-     * If the user is currently filtering by "Active" and deactivates a category,
-     * or filtering by "Inactive" and activates a category, reset filter to "All"
-     * so the category remains clearly visible on screen with its new status badge!
-     */
-    if (
-      (statusFilter === "Active" && !nextIsActive) ||
-      (statusFilter === "Inactive" && nextIsActive)
-    ) {
-      setStatusFilter("All");
-    }
-
-    notificationService.success(
-      `Category "${item.name || 'Category'}" status successfully changed to ${nextStatus}.`
-    );
-  } catch (error) {
-    console.error(
-      "Category Status Change Error:",
-      error
-    );
-
-    const errorMsg =
-      error?.response?.data?.detail ||
-      error?.response?.data?.message ||
-      "Failed to change category status.";
-
-    notificationService.error(typeof errorMsg === "string" ? errorMsg : "Failed to change category status.");
-    setError(typeof errorMsg === "string" ? errorMsg : "Failed to change category status.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   /* =========================================================
      CREATE / UPDATE
@@ -788,16 +829,22 @@ const handleStatusChange = async (
       const formattedName = formatCategoryName(data?.name);
       const trimmedName = formattedName.trim();
       if (!trimmedName) {
-        notificationService.warning("Please enter category name");
-        return;
+        notificationService.warning("Category name is required.");
+        const err = new Error("Category name is required.");
+        err.field = "name";
+        throw err;
       }
       if (trimmedName.length < 2) {
-        notificationService.warning("Category name must be at least 2 characters");
-        return;
+        notificationService.warning("Category name must contain at least 2 characters.");
+        const err = new Error("Category name must contain at least 2 characters.");
+        err.field = "name";
+        throw err;
       }
-      if (trimmedName.length > 255) {
-        notificationService.warning("Category name cannot exceed 255 characters");
-        return;
+      if (trimmedName.length > 100) {
+        notificationService.warning("Category name cannot exceed 100 characters.");
+        const err = new Error("Category name cannot exceed 100 characters.");
+        err.field = "name";
+        throw err;
       }
 
       const nextStatus =
@@ -815,9 +862,9 @@ const handleStatusChange = async (
       const payload = {
         name: formattedName,
         parent_id:
-          data.parent_id ??
-          selectedCategory?.parent_id ??
-          null,
+          data.parent_id !== undefined
+            ? data.parent_id
+            : selectedCategory?.parent_id ?? null,
         status: nextStatus,
         is_active: nextIsActive,
       };
@@ -914,9 +961,11 @@ const handleStatusChange = async (
       const errorMsg =
         error?.response?.data?.detail ||
         error?.response?.data?.message ||
+        error?.message ||
         (selectedCategory ? "Failed to update category" : "Failed to create category");
 
       notificationService.error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+      throw error; // Rethrow so CategoryModel can capture field errors and keep inputs preserved
     }
   };
 
@@ -924,19 +973,21 @@ const handleStatusChange = async (
      COUNTS
   ========================================================= */
 
-  const activeCount =
-    categories.filter(
-      (item) =>
-        item.status?.toLowerCase() ===
-        "active"
-    ).length;
+  /* =========================================================
+     COUNTS (Based on full backend categories)
+  ========================================================= */
 
-  const inactiveCount =
-    categories.filter(
-      (item) =>
-        item.status?.toLowerCase() ===
-        "inactive"
-    ).length;
+  const cardCategories = allCategories.length > 0 ? allCategories : categories;
+
+  const activeCount = cardCategories.filter(
+    (item) => item.status?.toLowerCase() === "active"
+  ).length;
+
+  const inactiveCount = cardCategories.filter(
+    (item) => item.status?.toLowerCase() === "inactive"
+  ).length;
+
+  const totalCount = cardCategories.length;
 
   /* =========================================================
      JSX
@@ -950,14 +1001,12 @@ const handleStatusChange = async (
       ===================================================== */}
 
       <CategoryHeader
-        total={categories.length}
+        total={totalCount}
         active={activeCount}
         inactive={inactiveCount}
         onAdd={handleAdd}
         onExport={handleExport}
         isExporting={isExporting}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
       />
 
       {/* =====================================================
@@ -965,7 +1014,7 @@ const handleStatusChange = async (
       ===================================================== */}
 
       <CategoryCards
-        categories={categories}
+        categories={cardCategories}
         statusFilter={statusFilter}
         onCardClick={handleCardClick}
       />
@@ -991,78 +1040,19 @@ const handleStatusChange = async (
       )}
 
       {/* =====================================================
-          FILTERS
+          SINGLE-ROW TOOLBAR: Search | Status Filter | Table View | Tree Hierarchy View
       ===================================================== */}
 
       <CategoryFilters
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        loadingTree={loadingTree}
+        onRefreshTree={loadCategoryTree}
       />
-
-      {/* View Mode Toggle: Table View vs Tree Hierarchy View (Issue 9) */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 14,
-        gap: 10,
-        flexWrap: "wrap",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f1f5f9", padding: "3px 4px", borderRadius: 8 }}>
-          <button
-            type="button"
-            onClick={() => setViewMode("table")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              fontSize: 12,
-              fontWeight: viewMode === "table" ? 600 : 500,
-              background: viewMode === "table" ? "#ffffff" : "transparent",
-              color: viewMode === "table" ? "#4f46e5" : "#64748b",
-              boxShadow: viewMode === "table" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              cursor: "pointer",
-            }}
-          >
-            <BsTable size={13} /> Table View
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("tree")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              fontSize: 12,
-              fontWeight: viewMode === "tree" ? 600 : 500,
-              background: viewMode === "tree" ? "#ffffff" : "transparent",
-              color: viewMode === "tree" ? "#4f46e5" : "#64748b",
-              boxShadow: viewMode === "tree" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              cursor: "pointer",
-            }}
-          >
-            <BsDiagram3 size={13} /> Tree Hierarchy View
-          </button>
-        </div>
-
-        {viewMode === "tree" && (
-          <button
-            type="button"
-            onClick={loadCategoryTree}
-            disabled={loadingTree}
-            className="category-btn secondary-btn"
-            style={{ padding: "6px 14px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
-          >
-            <BsArrowClockwise className={loadingTree ? "spin" : ""} size={13} /> Refresh Tree
-          </button>
-        )}
-      </div>
 
       {/* =====================================================
           CATEGORY CONTENT (Table or Tree)
@@ -1074,6 +1064,10 @@ const handleStatusChange = async (
           onEdit={handleEdit}
           onDelete={handleDelete}
           onStatusChange={handleStatusChange}
+          searchTerm={searchTerm}
+          onClearSearch={() => setSearchTerm("")}
+          statusFilter={statusFilter}
+          onResetFilter={() => { setStatusFilter("All"); setSearchTerm(""); }}
         />
       ) : (
         <div style={{
@@ -1224,11 +1218,14 @@ const handleStatusChange = async (
         <CategoryModel
           category={selectedCategory}
           isView={isViewMode}
+          initialTab={modalInitialTab}
+          allCategories={cardCategories}
           onSave={handleSave}
           onClose={() => {
             setShowModal(false);
             setSelectedCategory(null);
             setIsViewMode(false);
+            setModalInitialTab("details");
           }}
         />
       )}

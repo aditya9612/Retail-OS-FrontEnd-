@@ -5,12 +5,14 @@ import {
   BsTrash,
   BsFolder,
   BsInbox,
+  BsSearch,
   BsToggleOn,
   BsToggleOff,
   BsChevronRight,
   BsChevronDown,
   BsArrowReturnRight,
   BsArrowClockwise,
+  BsBoxes,
 } from "react-icons/bs";
 import category from "../../services/categoryService";
 
@@ -174,6 +176,10 @@ const CategoryTable = ({
   onEdit,
   onDelete,
   onStatusChange,
+  searchTerm = "",
+  onClearSearch,
+  statusFilter = "All",
+  onResetFilter,
 }) => {
   const [expandedIds, setExpandedIds] = useState({});
   const [subcategoriesMap, setSubcategoriesMap] = useState({});
@@ -198,10 +204,10 @@ const CategoryTable = ({
       const data = Array.isArray(res?.data?.data)
         ? res.data.data
         : Array.isArray(res?.data)
-        ? res.data
-        : Array.isArray(res?.data?.items)
-        ? res.data.items
-        : [];
+          ? res.data
+          : Array.isArray(res?.data?.items)
+            ? res.data.items
+            : [];
       setSubcategoriesMap((prev) => ({ ...prev, [item.id]: data }));
     } catch (err) {
       console.error(`Failed to fetch subcategories for category ${item.id}:`, err);
@@ -250,12 +256,54 @@ const CategoryTable = ({
               >
                 <div className="empty-state">
                   <div className="empty-icon">
-                    <BsInbox />
+                    {searchTerm ? <BsSearch size={22} /> : <BsInbox size={22} />}
                   </div>
 
-                  <span>
-                    No Categories Found
+                  <span style={{ fontWeight: 600, fontSize: 14, color: "#1e293b" }}>
+                    {searchTerm
+                      ? `No categories found matching "${searchTerm}"`
+                      : statusFilter !== "All"
+                      ? `No ${statusFilter.toLowerCase()} categories found`
+                      : "No Categories Found"}
                   </span>
+
+                  {searchTerm && onClearSearch ? (
+                    <button
+                      type="button"
+                      onClick={onClearSearch}
+                      style={{
+                        marginTop: 10,
+                        padding: "6px 14px",
+                        borderRadius: 6,
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        color: "#475569",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Clear Search
+                    </button>
+                  ) : statusFilter !== "All" && onResetFilter ? (
+                    <button
+                      type="button"
+                      onClick={onResetFilter}
+                      style={{
+                        marginTop: 10,
+                        padding: "6px 14px",
+                        borderRadius: 6,
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        color: "#475569",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Reset Filter
+                    </button>
+                  ) : null}
                 </div>
               </td>
             </tr>
@@ -283,16 +331,16 @@ const CategoryTable = ({
                   ? 0
                   : item.products !== null &&
                     item.products !==
-                      undefined &&
+                    undefined &&
                     Number.isFinite(
                       Number(
                         item.products
                       )
                     )
-                  ? Number(
+                    ? Number(
                       item.products
                     )
-                  : "-";
+                    : "-";
 
               /* =========================
                  CREATED DATE
@@ -301,7 +349,7 @@ const CategoryTable = ({
               const createdDate =
                 formatCategoryDate(
                   item.created ||
-                    item.created_at
+                  item.created_at
                 );
 
               const isExpanded = !!expandedIds[item.id];
@@ -310,342 +358,375 @@ const CategoryTable = ({
 
               return (
                 <React.Fragment key={item.id}>
-                <tr>
+                  <tr>
 
-                  {/* =====================
+                    {/* =====================
                       CATEGORY NAME
                   ===================== */}
 
-                  <td>
-                    <div className="category-name">
-                      <button
-                        type="button"
-                        className="category-expand-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleExpand(item);
-                        }}
-                        title={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
-                        aria-label={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          padding: "4px",
-                          marginRight: "2px",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#64748b",
-                          borderRadius: "4px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {isLoadingSubs ? (
-                          <BsArrowClockwise className="spin" size={13} />
-                        ) : isExpanded ? (
-                          <BsChevronDown size={13} />
-                        ) : (
-                          <BsChevronRight size={13} />
-                        )}
-                      </button>
+                    <td>
+                      <div className="category-name">
+                        <button
+                          type="button"
+                          className="category-expand-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleExpand(item);
+                          }}
+                          title={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
+                          aria-label={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            padding: "4px",
+                            marginRight: "2px",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#64748b",
+                            borderRadius: "4px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {isLoadingSubs ? (
+                            <BsArrowClockwise className="spin" size={13} />
+                          ) : isExpanded ? (
+                            <BsChevronDown size={13} />
+                          ) : (
+                            <BsChevronRight size={13} />
+                          )}
+                        </button>
 
-                      <div
-                        className="category-icon"
-                        aria-hidden="true"
-                      >
-                        <BsFolder />
+                        <div
+                          className="category-icon"
+                          aria-hidden="true"
+                        >
+                          <BsFolder />
+                        </div>
+
+                        <span className="category-name-text">
+                          {formatCategoryName(item.name) ||
+                            "Unnamed Category"}
+                        </span>
                       </div>
+                    </td>
 
-                      <span className="category-name-text">
-                        {formatCategoryName(item.name) ||
-                          "Unnamed Category"}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* =====================
+                    {/* =====================
                       TOTAL PRODUCTS
                   ===================== */}
 
-                  <td>
-                    <span className="product-count">
-                      {displayProductCount}
-                    </span>
-                  </td>
+                    <td>
+                      <span
+                        className="product-count"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (typeof onView === "function") {
+                            onView(item, "products");
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                        title="Click to view products"
+                      >
+                        {displayProductCount}
+                      </span>
+                    </td>
 
-                  {/* =====================
+                    {/* =====================
                       STATUS (Static Badge - Not Clickable)
                   ===================== */}
 
-                  <td>
-                    {status === "-" ? (
-                      <span className="created-date">
-                        -
-                      </span>
-                    ) : (
-                      <span
-                        className={
-                          isActive
-                            ? "status active"
-                            : "status inactive"
-                        }
-                      >
+                    <td>
+                      {status === "-" ? (
+                        <span className="created-date">
+                          -
+                        </span>
+                      ) : (
                         <span
-                          className="status-dot"
-                          aria-hidden="true"
-                        />
+                          className={
+                            isActive
+                              ? "status active"
+                              : "status inactive"
+                          }
+                        >
+                          <span
+                            className="status-dot"
+                            aria-hidden="true"
+                          />
 
-                        {status}
-                      </span>
-                    )}
-                  </td>
+                          {status}
+                        </span>
+                      )}
+                    </td>
 
-                  {/* =====================
+                    {/* =====================
                       CREATED DATE
                   ===================== */}
 
-                  <td>
-                    <span className="created-date">
-                      {createdDate}
-                    </span>
-                  </td>
+                    <td>
+                      <span className="created-date">
+                        {createdDate}
+                      </span>
+                    </td>
 
-                  {/* =====================
+                    {/* =====================
                       ACTIONS
                   ===================== */}
 
-                  <td>
-                    <div className="table-actions">
+                    <td>
+                      <div className="table-actions">
 
-                      {/* =================
+                        {/* =================
                           VIEW
                       ================= */}
 
-                      <button
-                        type="button"
-                        className="view-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (
-                            typeof onView ===
-                            "function"
-                          ) {
-                            onView(item);
-                          }
-                        }}
-                        aria-label={`View ${
-                          formatCategoryName(item.name) ||
-                          "category"
-                        }`}
-                        title="View"
-                      >
-                        <BsEye />
-                      </button>
+                        <button
+                          type="button"
+                          className="view-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (
+                              typeof onView ===
+                              "function"
+                            ) {
+                              onView(item, "details");
+                            }
+                          }}
+                          aria-label={`View ${formatCategoryName(item.name) ||
+                            "category"
+                            }`}
+                          title="View Details"
+                        >
+                          <BsEye />
+                        </button>
 
-                      {/* =================
+                        {/* =================
+                          VIEW PRODUCTS
+                      ================= */}
+
+                        <button
+                          type="button"
+                          className="view-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (
+                              typeof onView ===
+                              "function"
+                            ) {
+                              onView(item, "products");
+                            }
+                          }}
+                          aria-label={`View products for ${formatCategoryName(item.name) ||
+                            "category"
+                            }`}
+                          title="View Products"
+                          style={{
+                            color: "#2563eb",
+                            borderColor: "#bfdbfe",
+                          }}
+                        >
+                          <BsBoxes size={13} />
+                        </button>
+
+                        {/* =================
                           EDIT
                       ================= */}
 
-                      <button
-                        type="button"
-                        className="edit-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (
-                            typeof onEdit ===
-                            "function"
-                          ) {
-                            onEdit(item);
-                          }
-                        }}
-                        aria-label={`Edit ${
-                          formatCategoryName(item.name) ||
-                          "category"
-                        }`}
-                        title="Edit"
-                      >
-                        <BsPencil />
-                      </button>
+                        <button
+                          type="button"
+                          className="edit-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (
+                              typeof onEdit ===
+                              "function"
+                            ) {
+                              onEdit(item);
+                            }
+                          }}
+                          aria-label={`Edit ${formatCategoryName(item.name) ||
+                            "category"
+                            }`}
+                          title="Edit"
+                        >
+                          <BsPencil />
+                        </button>
 
-                      {/* =================
+                        {/* =================
                           ACTIVE /
                           INACTIVE
                       ================= */}
 
-                      {status !== "-" && (
-                        <button
-                          type="button"
-                          className={
-                            isActive
-                              ? "status-toggle-btn deactivate"
-                              : "status-toggle-btn activate"
-                          }
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (
-                              typeof onStatusChange ===
-                              "function"
-                            ) {
-                              onStatusChange(
-                                item,
-                                !isActive
-                              );
+                        {status !== "-" && (
+                          <button
+                            type="button"
+                            className={
+                              isActive
+                                ? "status-toggle-btn deactivate"
+                                : "status-toggle-btn activate"
                             }
-                          }}
-                          aria-label={
-                            isActive
-                              ? `Deactivate ${
-                                  formatCategoryName(item.name) ||
-                                  "category"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (
+                                typeof onStatusChange ===
+                                "function"
+                              ) {
+                                onStatusChange(
+                                  item,
+                                  !isActive
+                                );
+                              }
+                            }}
+                            aria-label={
+                              isActive
+                                ? `Deactivate ${formatCategoryName(item.name) ||
+                                "category"
                                 }`
-                              : `Activate ${
-                                  formatCategoryName(item.name) ||
-                                  "category"
+                                : `Activate ${formatCategoryName(item.name) ||
+                                "category"
                                 }`
-                          }
-                          title={
-                            isActive
-                              ? "Active (click to deactivate)"
-                              : "Inactive (click to activate)"
-                          }
-                        >
-                          {isActive ? (
-                            <BsToggleOn
-                              size={20}
-                            />
-                          ) : (
-                            <BsToggleOff
-                              size={20}
-                            />
-                          )}
-                        </button>
-                      )}
+                            }
+                            title={
+                              isActive
+                                ? "Active (click to deactivate)"
+                                : "Inactive (click to activate)"
+                            }
+                          >
+                            {isActive ? (
+                              <BsToggleOn
+                                size={20}
+                              />
+                            ) : (
+                              <BsToggleOff
+                                size={20}
+                              />
+                            )}
+                          </button>
+                        )}
 
-                      {/* =================
+                        {/* =================
                           DELETE
                       ================= */}
 
-                      <button
-                        type="button"
-                        className="delete-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (
-                            typeof onDelete ===
-                            "function"
-                          ) {
-                            onDelete(item);
-                          }
-                        }}
-                        aria-label={`Delete ${
-                          formatCategoryName(item.name) ||
-                          "category"
-                        }`}
-                        title="Delete"
-                      >
-                        <BsTrash />
-                      </button>
+                        <button
+                          type="button"
+                          className="delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (
+                              typeof onDelete ===
+                              "function"
+                            ) {
+                              onDelete(item);
+                            }
+                          }}
+                          aria-label={`Delete ${formatCategoryName(item.name) ||
+                            "category"
+                            }`}
+                          title="Delete"
+                        >
+                          <BsTrash />
+                        </button>
 
-                    </div>
-                  </td>
-                </tr>
+                      </div>
+                    </td>
+                  </tr>
 
-                {/* Subcategories Expansion Rows */}
-                {isExpanded && (
-                  isLoadingSubs ? (
-                    <tr className="subcategory-loading-row" style={{ background: "#f8fafc" }}>
-                      <td colSpan="5" style={{ padding: "10px 48px", fontSize: 12, color: "#64748b" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <BsArrowClockwise className="spin" size={13} /> Loading subcategories...
-                        </span>
-                      </td>
-                    </tr>
-                  ) : Array.isArray(subcategories) && subcategories.length > 0 ? (
-                    subcategories.map((sub) => {
-                      const subStatus = sub.is_active === false || String(sub.status).toLowerCase() === "inactive" ? "Inactive" : "Active";
-                      const subIsActive = subStatus === "Active";
-                      const subProductCount = sub.product_count ?? sub.products_count ?? (sub.is_active === false ? 0 : (sub.products ?? 0));
-                      return (
-                        <tr key={`sub_${sub.id}`} className="subcategory-row" style={{ background: "#fdfefe" }}>
-                          <td style={{ paddingLeft: 42 }}>
-                            <div className="category-name" style={{ gap: 8 }}>
-                              <span style={{ color: "#94a3b8", display: "inline-flex", flexShrink: 0 }}>
-                                <BsArrowReturnRight size={12} />
+                  {/* Subcategories Expansion Rows */}
+                  {isExpanded && (
+                    isLoadingSubs ? (
+                      <tr className="subcategory-loading-row" style={{ background: "#f8fafc" }}>
+                        <td colSpan="5" style={{ padding: "10px 48px", fontSize: 12, color: "#64748b" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <BsArrowClockwise className="spin" size={13} /> Loading subcategories...
+                          </span>
+                        </td>
+                      </tr>
+                    ) : Array.isArray(subcategories) && subcategories.length > 0 ? (
+                      subcategories.map((sub) => {
+                        const subStatus = sub.is_active === false || String(sub.status).toLowerCase() === "inactive" ? "Inactive" : "Active";
+                        const subIsActive = subStatus === "Active";
+                        const subProductCount = sub.product_count ?? sub.products_count ?? (sub.is_active === false ? 0 : (sub.products ?? 0));
+                        return (
+                          <tr key={`sub_${sub.id}`} className="subcategory-row" style={{ background: "#fdfefe" }}>
+                            <td style={{ paddingLeft: 42 }}>
+                              <div className="category-name" style={{ gap: 8 }}>
+                                <span style={{ color: "#94a3b8", display: "inline-flex", flexShrink: 0 }}>
+                                  <BsArrowReturnRight size={12} />
+                                </span>
+                                <span className="category-name-text" style={{ fontSize: 12, fontWeight: 500 }}>
+                                  {formatCategoryName(sub.name)}
+                                </span>
+                                <span style={{ fontSize: 10, background: "#f1f5f9", color: "#64748b", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                                  Subcategory
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="product-count" style={{ fontSize: 12 }}>
+                                {subProductCount}
                               </span>
-                              <span className="category-name-text" style={{ fontSize: 12, fontWeight: 500 }}>
-                                {formatCategoryName(sub.name)}
+                            </td>
+                            <td>
+                              <span className={subIsActive ? "status active" : "status inactive"}>
+                                <span className="status-dot" aria-hidden="true" />
+                                {subStatus}
                               </span>
-                              <span style={{ fontSize: 10, background: "#f1f5f9", color: "#64748b", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
-                                Subcategory
+                            </td>
+                            <td>
+                              <span className="created-date" style={{ fontSize: 11 }}>
+                                {formatCategoryDate(sub.created_at || sub.created)}
                               </span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="product-count" style={{ fontSize: 12 }}>
-                              {subProductCount}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={subIsActive ? "status active" : "status inactive"}>
-                              <span className="status-dot" aria-hidden="true" />
-                              {subStatus}
-                            </span>
-                          </td>
-                          <td>
-                            <span className="created-date" style={{ fontSize: 11 }}>
-                              {formatCategoryDate(sub.created_at || sub.created)}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="table-actions">
-                              <button
-                                type="button"
-                                className="view-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (typeof onView === "function") onView(sub);
-                                }}
-                                title="View"
-                              >
-                                <BsEye />
-                              </button>
-                              <button
-                                type="button"
-                                className="edit-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (typeof onEdit === "function") onEdit(sub);
-                                }}
-                                title="Edit"
-                              >
-                                <BsPencil />
-                              </button>
-                              <button
-                                type="button"
-                                className="delete-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (typeof onDelete === "function") onDelete(sub);
-                                }}
-                                title="Delete"
-                              >
-                                <BsTrash />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr className="subcategory-empty-row" style={{ background: "#f8fafc" }}>
-                      <td colSpan="5" style={{ padding: "8px 48px", fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
-                        No subcategories found under {formatCategoryName(item.name)}.
-                      </td>
-                    </tr>
-                  )
-                )}
-              </React.Fragment>
+                            </td>
+                            <td>
+                              <div className="table-actions">
+                                <button
+                                  type="button"
+                                  className="view-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (typeof onView === "function") onView(sub);
+                                  }}
+                                  title="View"
+                                >
+                                  <BsEye />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="edit-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (typeof onEdit === "function") onEdit(sub);
+                                  }}
+                                  title="Edit"
+                                >
+                                  <BsPencil />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="delete-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (typeof onDelete === "function") onDelete(sub);
+                                  }}
+                                  title="Delete"
+                                >
+                                  <BsTrash />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr className="subcategory-empty-row" style={{ background: "#f8fafc" }}>
+                        <td colSpan="5" style={{ padding: "8px 48px", fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
+                          No subcategories found under {formatCategoryName(item.name)}.
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </React.Fragment>
               );
             })
           )}

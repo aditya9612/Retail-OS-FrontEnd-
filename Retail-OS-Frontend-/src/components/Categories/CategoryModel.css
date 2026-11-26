@@ -261,6 +261,36 @@
   letter-spacing: 0.005em;
 }
 
+.category-modal .form-group label .required-star {
+  color: #dc2626;
+  margin-left: 4px;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.category-modal .form-group input.has-error,
+.category-modal .form-group select.has-error,
+.category-modal .form-group textarea.has-error {
+  border-color: #dc2626 !important;
+  background-color: #fffaf0;
+}
+
+.category-modal .form-group input.has-error:focus,
+.category-modal .form-group select.has-error:focus,
+.category-modal .form-group textarea.has-error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+}
+
+.category-modal .form-field-error {
+  display: block;
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 11.5px;
+  line-height: 15px;
+  font-weight: 500;
+}
+
 
 /* =========================================================
    INPUT / TEXTAREA

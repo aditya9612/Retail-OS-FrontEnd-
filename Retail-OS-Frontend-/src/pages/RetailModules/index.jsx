@@ -1001,7 +1001,7 @@ export const BarcodePage = () => {
                                         background: '#f8fafc',
                                         color: '#334155',
                                         border: '1px solid #cbd5e1',
-                                        padding: '6px 14px',
+                                        padding: '6px 12px',
                                         borderRadius: 6,
                                         fontSize: 12,
                                         fontWeight: 600,
@@ -1012,6 +1012,66 @@ export const BarcodePage = () => {
                                     }}
                                 >
                                     <BsPrinter size={13} /> Print Single Label
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadBarcode}
+                                    title="Download barcode graphic as PNG"
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Barcode (PNG)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadBarcodeSVG}
+                                    title="Download standalone barcode vector SVG"
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Barcode (SVG)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadLabelSVG}
+                                    title="Download complete label sticker vector SVG"
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Label (SVG)
                                 </button>
                             </div>
                         )}
