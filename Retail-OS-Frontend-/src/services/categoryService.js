@@ -65,9 +65,25 @@ const category = {
 
   // =========================================================
   // GET - Export Categories (Backend API - CSV / Excel / PDF)
+  // Backend requires: format ('csv' | 'excel'), is_active ('all' | 'true' | 'false')
   // =========================================================
   export(params = {}) {
-    const cleanParams = { format: "csv", ...params };
+    const cleanParams = {
+      format: "csv",
+      is_active: "all",
+      ...params,
+    };
+
+    // Sanitize optional search param: backend rejects empty/whitespace or non-alphanumeric search strings with 422
+    if (cleanParams.search !== undefined && cleanParams.search !== null) {
+      const trimmed = String(cleanParams.search).trim();
+      if (!trimmed || !/[a-zA-Z0-9]/.test(trimmed)) {
+        delete cleanParams.search;
+      } else {
+        cleanParams.search = trimmed.slice(0, 100);
+      }
+    }
+
     return axiosInstance.get(`${BASE_URL}/export`, {
       params: cleanParams,
       responseType: "blob",
