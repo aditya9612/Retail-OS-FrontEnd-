@@ -34,6 +34,7 @@ import {
     BsGraphUpArrow,
     BsPercent,
     BsCashStack,
+    BsTags,
 } from 'react-icons/bs';
 
 import {
@@ -44,6 +45,7 @@ import {
     getRecentTransactions,
     getStores,
     getAnalyticsProducts,
+    getInventoryValuationBreakdown,
 } from '../../services/dashboard';
 import { getOrders } from '../../services/orderService';
 import { getInvoices } from '../../services/billingService';
@@ -94,6 +96,12 @@ const formatCompactCurrency = (val) => {
 const formatInteger = (val) => {
     if (val === null || val === undefined || isNaN(Number(val))) return '—';
     return Number(val).toLocaleString('en-IN');
+};
+
+const formatPercentage = (val) => {
+    if (val === null || val === undefined || isNaN(Number(val))) return '—';
+    const num = Number(val);
+    return `${num.toFixed(2)}%`;
 };
 
 const formatSyncTime = (date) => {
@@ -202,6 +210,11 @@ const Dashboard = () => {
     const [revenueVsCost, setRevenueVsCost] = useState(null);
     const [topProducts, setTopProducts] = useState([]);
     const [transactions, setTransactions] = useState([]);
+
+    // ── Inventory Valuation Breakdown State ──
+    const [valuationData, setValuationData] = useState(null);
+    const [valuationError, setValuationError] = useState(null);
+    const [valuationActiveTab, setValuationActiveTab] = useState('categories'); // 'categories' | 'stores'
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -431,6 +444,7 @@ const Dashboard = () => {
                 recentTxResult,
                 ordersResult,
                 analyticsProductsResult,
+                valuationResult,
             ] = await Promise.allSettled([
                 getDashboardSummary(mainPeriodVal, storeFilter),
                 getDashboardOverview(ovPeriodVal || mainPeriodVal, storeFilter),
@@ -445,6 +459,7 @@ const Dashboard = () => {
                 getAnalyticsProducts({
                     store_id: storeFilter || undefined,
                 }),
+                getInventoryValuationBreakdown(storeFilter),
             ]);
 
             // Prevent stale responses if a newer request was dispatched
@@ -576,6 +591,18 @@ const Dashboard = () => {
             }
             setTransactions(txList.slice(0, 10));
 
+            // 6. Inventory Valuation Breakdown (Real Backend Integration)
+            if (valuationResult.status === 'fulfilled' && valuationResult.value) {
+                const rawVal = valuationResult.value;
+                const valObj = rawVal?.data ?? rawVal;
+                setValuationData(valObj);
+                setValuationError(null);
+            } else if (valuationResult.status === 'rejected') {
+                console.warn('Inventory Valuation Breakdown API notice:', valuationResult.reason);
+                setValuationError(valuationResult.reason?.message || 'Failed to load inventory valuation breakdown');
+                setValuationData(null);
+            }
+
             if (hadError && errorMsg) {
                 setError(errorMsg);
             } else {
@@ -626,6 +653,64 @@ const Dashboard = () => {
         const current = summary.stores_summary.find((s) => String(s.store_id) === String(selectedStore));
         return current ? Number(current.orders_count || 0) : null;
     }, [selectedStore, summary]);
+
+    // ── Inventory Valuation Breakdown Data Extraction ──
+    const valuationSummary = useMemo(() => {
+        if (!valuationData) return null;
+        const s = valuationData.summary || {};
+        const totalItems = s.total_items ?? s.totalItems ?? s.item_count ?? s.items_count;
+        const totalQuantity = s.total_quantity ?? s.totalQuantity ?? s.quantity;
+        const totalCostValue = s.total_cost_value ?? s.totalCostValue ?? s.cost_value;
+        const totalRetailValue = s.total_retail_value ?? s.totalRetailValue ?? s.retail_value;
+        const grossProfit = s.potential_gross_profit ?? s.potentialGrossProfit ?? 
+            (totalRetailValue !== null && totalCostValue !== null ? Number(totalRetailValue) - Number(totalCostValue) : null);
+        const marginPct = s.potential_margin_percentage ?? s.potentialMarginPercentage ?? s.potential_margin_percent ??
+            (totalRetailValue && Number(totalRetailValue) > 0 && grossProfit !== null ? (Number(grossProfit) / Number(totalRetailValue)) * 100 : null);
+
+        return {
+            total_items: totalItems != null ? Number(totalItems) : null,
+            total_quantity: totalQuantity != null ? Number(totalQuantity) : null,
+            total_cost_value: totalCostValue != null ? Number(totalCostValue) : null,
+            total_retail_value: totalRetailValue != null ? Number(totalRetailValue) : null,
+            potential_gross_profit: grossProfit != null ? Number(grossProfit) : null,
+            potential_margin_percentage: marginPct != null ? Number(marginPct) : null,
+        };
+    }, [valuationData]);
+
+    const valuationStores = useMemo(() => {
+        if (!valuationData) return [];
+        const list = Array.isArray(valuationData.stores_breakdown)
+            ? valuationData.stores_breakdown
+            : Array.isArray(valuationData.stores)
+            ? valuationData.stores
+            : [];
+        return list;
+    }, [valuationData]);
+
+    const valuationCategories = useMemo(() => {
+        if (!valuationData) return [];
+        const list = Array.isArray(valuationData.categories_breakdown)
+            ? valuationData.categories_breakdown
+            : Array.isArray(valuationData.categories)
+            ? valuationData.categories
+            : [];
+        return list;
+    }, [valuationData]);
+
+    const getCategoryDisplayName = useCallback((cat) => {
+        const rawName = cat?.category_name ?? cat?.categoryName ?? cat?.name;
+        if (typeof rawName === 'string') {
+            const trimmed = rawName.trim();
+            if (trimmed && trimmed.toLowerCase() !== 'null' && trimmed.toLowerCase() !== 'undefined' && trimmed !== '—' && trimmed !== '-') {
+                return trimmed;
+            }
+        }
+        const catId = cat?.category_id ?? cat?.categoryId ?? cat?.id;
+        if (catId !== null && catId !== undefined && Number(catId) > 0) {
+            return `Category #${catId}`;
+        }
+        return 'Uncategorized';
+    }, []);
 
     // ── Financial Performance Metrics ──
     // Formulas:
@@ -1610,6 +1695,365 @@ const Dashboard = () => {
                     </div>
                 </section>
             )}
+
+            {/* ── Inventory Valuation & Breakdown Section ── */}
+            <section className="dashboard-section inventory-valuation-section" aria-label="Inventory Valuation Breakdown">
+                <div className="dashboard-card valuation-card">
+                    {/* Header */}
+                    <div className="dashboard-card-header valuation-card-header">
+                        <div className="card-title-group">
+                            <div className="card-header-icon indigo">
+                                <BsBoxSeam />
+                            </div>
+                            <div>
+                                <div className="valuation-title-row">
+                                    <h3 className="card-title">Inventory Valuation Breakdown</h3>
+                                    <span className="valuation-live-pill">
+                                        <BsShop style={{ marginRight: 5 }} />
+                                        {selectedStoreLabel}
+                                    </span>
+                                </div>
+                                <p className="card-subtitle">
+                                    {selectedStore
+                                        ? `Real-time asset valuation, stock quantity, cost basis, and category breakdown for ${selectedStoreLabel}`
+                                        : 'Consolidated asset valuation, potential margins, store distribution, and category breakdown across all inventory'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* View Tabs: Categories vs Stores */}
+                        <div className="valuation-tab-group" role="tablist">
+                            <button
+                                type="button"
+                                className={`valuation-tab-btn ${valuationActiveTab === 'categories' ? 'active' : ''}`}
+                                onClick={() => setValuationActiveTab('categories')}
+                                role="tab"
+                                aria-selected={valuationActiveTab === 'categories'}
+                            >
+                                <BsTags style={{ marginRight: 6 }} />
+                                Category Breakdown
+                                {valuationCategories.length > 0 && (
+                                    <span className="valuation-tab-count">{valuationCategories.length}</span>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                className={`valuation-tab-btn ${valuationActiveTab === 'stores' ? 'active' : ''}`}
+                                onClick={() => setValuationActiveTab('stores')}
+                                role="tab"
+                                aria-selected={valuationActiveTab === 'stores'}
+                            >
+                                <BsShop style={{ marginRight: 6 }} />
+                                Store Breakdown
+                                {valuationStores.length > 0 && (
+                                    <span className="valuation-tab-count">{valuationStores.length}</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Valuation Summary 6 Cards Grid */}
+                    <div className="valuation-summary-grid">
+                        {/* 1. Total Items */}
+                        <div className="val-stat-card">
+                            <div className="val-stat-icon blue">
+                                <BsBoxSeam />
+                            </div>
+                            <div className="val-stat-content">
+                                <span className="val-stat-label">Total Items</span>
+                                <span className="val-stat-value">
+                                    {loading ? <span className="skeleton-line sm" /> : formatInteger(valuationSummary?.total_items)}
+                                </span>
+                                <span className="val-stat-hint">Catalog product lines</span>
+                            </div>
+                        </div>
+
+                        {/* 2. Total Quantity */}
+                        <div className="val-stat-card">
+                            <div className="val-stat-icon teal">
+                                <BsBox />
+                            </div>
+                            <div className="val-stat-content">
+                                <span className="val-stat-label">Total Quantity</span>
+                                <span className="val-stat-value">
+                                    {loading ? <span className="skeleton-line sm" /> : formatInteger(valuationSummary?.total_quantity)}
+                                </span>
+                                <span className="val-stat-hint">Total physical units in stock</span>
+                            </div>
+                        </div>
+
+                        {/* 3. Total Cost Value */}
+                        <div className="val-stat-card">
+                            <div className="val-stat-icon indigo">
+                                <BsCashStack />
+                            </div>
+                            <div className="val-stat-content">
+                                <div className="val-stat-label-row">
+                                    <span className="val-stat-label">Total Cost Value</span>
+                                    <span className="val-badge cost">Cost Basis</span>
+                                </div>
+                                <span className="val-stat-value cost">
+                                    {loading ? <span className="skeleton-line sm" /> : formatCurrency(valuationSummary?.total_cost_value)}
+                                </span>
+                                <span className="val-stat-hint">Purchased cost valuation</span>
+                            </div>
+                        </div>
+
+                        {/* 4. Total Retail Value */}
+                        <div className="val-stat-card">
+                            <div className="val-stat-icon purple">
+                                <BsTagFill />
+                            </div>
+                            <div className="val-stat-content">
+                                <div className="val-stat-label-row">
+                                    <span className="val-stat-label">Total Retail Value</span>
+                                    <span className="val-badge retail">Retail Price</span>
+                                </div>
+                                <span className="val-stat-value retail">
+                                    {loading ? <span className="skeleton-line sm" /> : formatCurrency(valuationSummary?.total_retail_value)}
+                                </span>
+                                <span className="val-stat-hint">Expected retail revenue</span>
+                            </div>
+                        </div>
+
+                        {/* 5. Potential Gross Profit */}
+                        <div className="val-stat-card">
+                            <div className="val-stat-icon green">
+                                <BsGraphUpArrow />
+                            </div>
+                            <div className="val-stat-content">
+                                <div className="val-stat-label-row">
+                                    <span className="val-stat-label">Potential Gross Profit</span>
+                                    <span className="val-badge profit">Profit</span>
+                                </div>
+                                <span className="val-stat-value profit">
+                                    {loading ? <span className="skeleton-line sm" /> : formatCurrency(valuationSummary?.potential_gross_profit)}
+                                </span>
+                                <span className="val-stat-hint">Retail value − cost basis</span>
+                            </div>
+                        </div>
+
+                        {/* 6. Potential Margin Percentage */}
+                        <div className="val-stat-card">
+                            <div className="val-stat-icon amber">
+                                <BsPercent />
+                            </div>
+                            <div className="val-stat-content">
+                                <div className="val-stat-label-row">
+                                    <span className="val-stat-label">Potential Margin</span>
+                                    <span className="val-badge margin">Margin</span>
+                                </div>
+                                <span className="val-stat-value margin">
+                                    {loading ? <span className="skeleton-line sm" /> : formatPercentage(valuationSummary?.potential_margin_percentage)}
+                                </span>
+                                <span className="val-stat-hint">Gross profit ÷ retail value</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Notice if Valuation API had an issue */}
+                    {valuationError && !valuationSummary && (
+                        <div className="valuation-error-notice">
+                            <BsExclamationCircleFill style={{ marginRight: 8, color: '#f59e0b', flexShrink: 0 }} />
+                            <span>{valuationError}</span>
+                        </div>
+                    )}
+
+                    {/* Breakdown Tables Container */}
+                    <div className="valuation-tables-container">
+                        {/* TAB 1: CATEGORY-WISE BREAKDOWN */}
+                        {valuationActiveTab === 'categories' && (
+                            <div className="valuation-table-view">
+                                <div className="valuation-table-subhead">
+                                    <div className="valuation-subhead-info">
+                                        <h4 className="valuation-subhead-title">Category-wise Valuation Breakdown</h4>
+                                        <p className="valuation-subhead-desc">
+                                            Inventory assets, quantity, and valuation distributed by product category
+                                        </p>
+                                    </div>
+                                    <Link to="/inventory" className="card-view-all">
+                                        Open Inventory
+                                    </Link>
+                                </div>
+
+                                <div className="dashboard-table-wrap">
+                                    <table className="dashboard-table valuation-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Category Name</th>
+                                                <th style={{ textAlign: 'center' }}>Item Count</th>
+                                                <th style={{ textAlign: 'center' }}>Total Quantity</th>
+                                                <th style={{ textAlign: 'right' }}>Total Cost Value</th>
+                                                <th style={{ textAlign: 'right' }}>Total Retail Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {loading ? (
+                                                Array.from({ length: 4 }).map((_, i) => (
+                                                    <tr key={`val-cat-skel-${i}`}>
+                                                        <td><span className="skeleton-line md" /></td>
+                                                        <td style={{ textAlign: 'center' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'center' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'right' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'right' }}><span className="skeleton-line sm" /></td>
+                                                    </tr>
+                                                ))
+                                            ) : valuationCategories.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={5} className="valuation-empty-cell">
+                                                        No category breakdown data available for the selected store.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                valuationCategories.map((cat, idx) => {
+                                                    const displayName = getCategoryDisplayName(cat);
+                                                    const isUncategorized = displayName === 'Uncategorized';
+                                                    const catId = cat.category_id ?? cat.categoryId ?? cat.id;
+
+                                                    return (
+                                                        <tr key={catId ?? `cat-${idx}`}>
+                                                            <td>
+                                                                <div className="val-cat-name-cell">
+                                                                    <span className={`valuation-cat-badge ${isUncategorized ? 'uncategorized' : ''}`}>
+                                                                        {displayName}
+                                                                    </span>
+                                                                    {catId && !isUncategorized && (
+                                                                        <span className="val-cat-id">ID: #{catId}</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                                                {formatInteger(cat.item_count ?? cat.itemCount ?? cat.total_items)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                                                {formatInteger(cat.total_quantity ?? cat.totalQuantity)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#334155' }}>
+                                                                {formatCurrency(cat.total_cost_value ?? cat.totalCostValue)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                                                                {formatCurrency(cat.total_retail_value ?? cat.totalRetailValue)}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 2: STORE-WISE BREAKDOWN */}
+                        {valuationActiveTab === 'stores' && (
+                            <div className="valuation-table-view">
+                                <div className="valuation-table-subhead">
+                                    <div className="valuation-subhead-info">
+                                        <h4 className="valuation-subhead-title">Store-wise Valuation Breakdown</h4>
+                                        <p className="valuation-subhead-desc">
+                                            Asset value, quantities, and potential margins across individual retail stores
+                                        </p>
+                                    </div>
+                                    <Link to="/stores" className="card-view-all">
+                                        Manage Stores
+                                    </Link>
+                                </div>
+
+                                <div className="dashboard-table-wrap">
+                                    <table className="dashboard-table valuation-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Store Name</th>
+                                                <th style={{ textAlign: 'center' }}>Item Count</th>
+                                                <th style={{ textAlign: 'center' }}>Total Quantity</th>
+                                                <th style={{ textAlign: 'right' }}>Total Cost Value</th>
+                                                <th style={{ textAlign: 'right' }}>Total Retail Value</th>
+                                                <th style={{ textAlign: 'right' }}>Potential Gross Profit</th>
+                                                <th style={{ textAlign: 'center' }}>Potential Margin %</th>
+                                                <th style={{ textAlign: 'right' }}>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {loading ? (
+                                                Array.from({ length: 3 }).map((_, i) => (
+                                                    <tr key={`val-st-skel-${i}`}>
+                                                        <td><span className="skeleton-line md" /></td>
+                                                        <td style={{ textAlign: 'center' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'center' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'right' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'right' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'right' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'center' }}><span className="skeleton-line sm" /></td>
+                                                        <td style={{ textAlign: 'right' }}><span className="skeleton-line sm" /></td>
+                                                    </tr>
+                                                ))
+                                            ) : valuationStores.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={8} className="valuation-empty-cell">
+                                                        No store breakdown data available for the selected store.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                valuationStores.map((st, idx) => {
+                                                    const stName = st.store_name ?? st.storeName ?? (st.store_id ? `Store #${st.store_id}` : 'Store');
+                                                    const isCurrentlyFiltered = String(selectedStore) === String(st.store_id);
+
+                                                    return (
+                                                        <tr key={st.store_id ?? `st-${idx}`}>
+                                                            <td style={{ fontWeight: 600 }}>
+                                                                <div className="val-store-name-cell">
+                                                                    <span>{stName}</span>
+                                                                    {st.store_id && (
+                                                                        <span className="val-store-id-tag">#{st.store_id}</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                                                {formatInteger(st.item_count ?? st.itemCount ?? st.total_items)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                                                {formatInteger(st.total_quantity ?? st.totalQuantity)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#334155' }}>
+                                                                {formatCurrency(st.total_cost_value ?? st.totalCostValue)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                                                                {formatCurrency(st.total_retail_value ?? st.totalRetailValue)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                                                                {formatCurrency(st.potential_gross_profit ?? st.potentialGrossProfit)}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center' }}>
+                                                                <span className="val-margin-pill">
+                                                                    {formatPercentage(st.potential_margin_percentage ?? st.potentialMarginPercentage ?? st.potential_margin_percent)}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ textAlign: 'right' }}>
+                                                                {isCurrentlyFiltered ? (
+                                                                    <span className="val-current-store-tag">Active Filter</span>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="store-filter-btn"
+                                                                        onClick={() => setSelectedStore(String(st.store_id))}
+                                                                        title={`Filter dashboard for ${stName}`}
+                                                                    >
+                                                                        Filter Store
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
 
             {/* ── Bottom Row: Tables (2 Columns) ── */}
             <section className="bottom-tables-row">

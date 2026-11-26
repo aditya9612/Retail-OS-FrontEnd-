@@ -122,6 +122,21 @@ export const getAnalyticsProducts = async (queryParams = {}) => {
     }
 };
 
+/**
+ * Fetch inventory valuation breakdown (summary, store breakdown, category breakdown).
+ * Endpoint: GET /api/v1/inventory/valuation/breakdown
+ * @param {number|string|null} storeId - Optional store ID filter
+ * @returns {Promise<Object>} ValuationBreakdownResponse: { summary, stores_breakdown, categories_breakdown }
+ */
+export const getInventoryValuationBreakdown = async (storeId = null) => {
+    const params = {};
+    if (storeId !== null && storeId !== undefined && storeId !== "" && storeId !== "all") {
+        params.store_id = Number(storeId);
+    }
+    const response = await apiClient.get(resolveUrl("/api/v1/inventory/valuation/breakdown"), { params });
+    return response.data;
+};
+
 const dashboardService = {
     getDashboard: getDashboardSummary,
     getDashboardSummary,
@@ -132,6 +147,7 @@ const dashboardService = {
     getRecentTransactions,
     getStores,
     getAnalyticsProducts,
+    getInventoryValuationBreakdown,
 };
 
 export default dashboardService;

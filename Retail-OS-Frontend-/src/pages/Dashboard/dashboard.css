@@ -1523,3 +1523,401 @@ button.kpi-card {
     color: #ffffff;
     border-color: #2563eb;
 }
+
+/* =====================================================
+   INVENTORY VALUATION BREAKDOWN SECTION
+===================================================== */
+.inventory-valuation-section {
+    margin-top: 24px;
+}
+
+.valuation-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.valuation-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.card-header-icon.indigo {
+    background-color: #e0e7ff;
+    color: #4f46e5;
+}
+
+.valuation-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 2px;
+}
+
+.valuation-live-pill {
+    display: inline-flex;
+    align-items: center;
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.valuation-tab-group {
+    display: flex;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 8px;
+    gap: 4px;
+}
+
+.valuation-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.valuation-tab-btn:hover {
+    color: #1e293b;
+}
+
+.valuation-tab-btn.active {
+    background: #ffffff;
+    color: #2563eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.valuation-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #e2e8f0;
+    color: #475569;
+    border-radius: 9999px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    margin-left: 6px;
+}
+
+.valuation-tab-btn.active .valuation-tab-count {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+/* 6 Valuation Summary Cards Grid */
+.valuation-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+@media (max-width: 1400px) {
+    .valuation-summary-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .valuation-summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .valuation-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.val-stat-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.val-stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    background: #ffffff;
+}
+
+.val-stat-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+}
+
+.val-stat-icon.blue {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.val-stat-icon.teal {
+    background: #f0fdfa;
+    color: #0d9488;
+}
+
+.val-stat-icon.indigo {
+    background: #e0e7ff;
+    color: #4f46e5;
+}
+
+.val-stat-icon.purple {
+    background: #f3e8ff;
+    color: #7c3aed;
+}
+
+.val-stat-icon.green {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.val-stat-icon.amber {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.val-stat-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.val-stat-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.val-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.val-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.val-badge.cost {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.val-badge.retail {
+    background: #f3e8ff;
+    color: #6d28d9;
+}
+
+.val-badge.profit {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.val-badge.margin {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.val-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.3px;
+    line-height: 1.25;
+}
+
+.val-stat-value.cost {
+    color: #334155;
+}
+
+.val-stat-value.retail {
+    color: #1e1b4b;
+}
+
+.val-stat-value.profit {
+    color: #059669;
+}
+
+.val-stat-value.margin {
+    color: #d97706;
+}
+
+.val-stat-hint {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+/* Error Notice */
+.valuation-error-notice {
+    display: flex;
+    align-items: center;
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 16px;
+}
+
+/* Tables Styling */
+.valuation-table-view {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.valuation-table-subhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.valuation-subhead-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 2px 0;
+}
+
+.valuation-subhead-desc {
+    font-size: 12px;
+    color: #64748b;
+    margin: 0;
+}
+
+.valuation-table th {
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 10px 14px;
+}
+
+.valuation-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 13px;
+}
+
+.val-cat-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.valuation-cat-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #eef2ff;
+    color: #4f46e5;
+    border: 1px solid #e0e7ff;
+}
+
+.valuation-cat-badge.uncategorized {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #cbd5e1;
+    font-style: italic;
+}
+
+.val-cat-id {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.val-store-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.val-store-id-tag {
+    font-size: 11px;
+    color: #64748b;
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-weight: 500;
+}
+
+.val-margin-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.val-current-store-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.valuation-empty-cell {
+    text-align: center;
+    padding: 28px 16px !important;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 500;
+}

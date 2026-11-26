@@ -103,6 +103,7 @@ const InventoryTable = ({
   stockStatus,
   fmt,
   setStockModal,
+  suppliers = [],
 
   // Inventory API actions
   onView,
@@ -215,6 +216,7 @@ const InventoryTable = ({
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
+            <th>Supplier</th>
             <th>Store Name</th>
             <th>Store ID</th>
             <th>Available Qty</th>
@@ -269,6 +271,29 @@ const InventoryTable = ({
               item.category_name ||
               item.categoryName ||
               (item.category_id ? `Category #${item.category_id}` : "—");
+
+            /* =====================================================
+               SUPPLIER
+            ===================================================== */
+
+            const supplierName =
+              (typeof item.supplier_name === "string" && item.supplier_name.trim() && item.supplier_name.trim() !== "—" && item.supplier_name.trim() !== "-" ? item.supplier_name.trim() : null) ||
+              (typeof item.supplierName === "string" && item.supplierName.trim() && item.supplierName.trim() !== "—" && item.supplierName.trim() !== "-" ? item.supplierName.trim() : null) ||
+              (typeof item.supplier === "string" && item.supplier.trim() && item.supplier.trim() !== "—" && item.supplier.trim() !== "-" ? item.supplier.trim() : null) ||
+              (typeof item.supplier === "object" ? (item.supplier?.name || item.supplier?.supplier_name) : null) ||
+              (typeof item.product?.supplier_name === "string" && item.product.supplier_name.trim() ? item.product.supplier_name.trim() : null) ||
+              (typeof item.product?.supplierName === "string" && item.product.supplierName.trim() ? item.product.supplierName.trim() : null) ||
+              (typeof item.product?.supplier === "string" && item.product.supplier.trim() ? item.product.supplier.trim() : null) ||
+              (typeof item.product?.supplier === "object" ? (item.product?.supplier?.name || item.product?.supplier?.supplier_name) : null) ||
+              (typeof item.vendor === "string" && item.vendor.trim() ? item.vendor.trim() : null) ||
+              (typeof item.vendor_name === "string" && item.vendor_name.trim() ? item.vendor_name.trim() : null) ||
+              (typeof item.product?.vendor === "string" && item.product.vendor.trim() ? item.product.vendor.trim() : null) ||
+              (typeof item.product?.vendor_name === "string" && item.product.vendor_name.trim() ? item.product.vendor_name.trim() : null) ||
+              (item.supplier_id && Array.isArray(suppliers) ? (suppliers.find((s) => Number(s?.id) === Number(item.supplier_id))?.name || suppliers.find((s) => Number(s?.id) === Number(item.supplier_id))?.supplier_name) : null) ||
+              (item.product?.supplier_id && Array.isArray(suppliers) ? (suppliers.find((s) => Number(s?.id) === Number(item.product.supplier_id))?.name || suppliers.find((s) => Number(s?.id) === Number(item.product.supplier_id))?.supplier_name) : null) ||
+              (item.supplier_id && Number(item.supplier_id) > 0 ? `Supplier #${item.supplier_id}` : null) ||
+              (item.product?.supplier_id && Number(item.product.supplier_id) > 0 ? `Supplier #${item.product.supplier_id}` : null) ||
+              "—";
 
             /* =====================================================
                LOCATION / WAREHOUSE
@@ -595,6 +620,22 @@ const isMissingRequiredExpiry =
                     }}
                   >
                     {category || "—"}
+                  </span>
+                </td>
+
+                {/* =================================================
+                   SUPPLIER
+                ================================================= */}
+
+                <td className="inv-col-supplier">
+                  <span
+                    style={{
+                      fontWeight: supplierName && supplierName !== "—" ? 600 : 400,
+                      color: supplierName && supplierName !== "—" ? "#1e293b" : "#9ca3af",
+                      fontSize: 13,
+                    }}
+                  >
+                    {supplierName}
                   </span>
                 </td>
 

@@ -2123,6 +2123,8 @@ const Inventory = () => {
         useState([]);
 
     const rawInventoryRef = useRef(null);
+    const rawCategoriesRef = useRef(null);
+    const inFlightCategoriesPromiseRef = useRef(null);
     const initialLoadRef = useRef(false);
     const prevWarehouseFilterRef = useRef("All Warehouses");
     const isInitialMountRef = useRef(true);
@@ -2973,48 +2975,69 @@ const Inventory = () => {
        FETCH CATEGORIES
     ===================================================== */
 
-    const fetchCategories = async (overrideProducts = null) => {
+    const fetchCategories = async (overrideProducts = null, forceRefresh = false) => {
         try {
             let catList = [];
 
-            // 1. Fetch from category.getAll()
-            try {
-                const response = await category.getAll();
-                const body = response?.data ?? response;
-                const list = Array.isArray(body)
-                    ? body
-                    : Array.isArray(body?.data)
-                    ? body.data
-                    : Array.isArray(body?.items)
-                    ? body.items
-                    : Array.isArray(body?.categories)
-                    ? body.categories
-                    : [];
-                if (list.length > 0) {
-                    catList.push(...list);
-                }
-            } catch (err) {
-                console.warn("category.getAll error:", err);
-            }
+            // Reuse in-memory category data if already fetched, unless forceRefresh is true
+            if (!forceRefresh && rawCategoriesRef.current && Array.isArray(rawCategoriesRef.current)) {
+                catList = rawCategoriesRef.current;
+            } else {
+                // If a network fetch is already in flight, await it to prevent duplicate requests
+                if (!inFlightCategoriesPromiseRef.current) {
+                    inFlightCategoriesPromiseRef.current = (async () => {
+                        let fetched = [];
 
-            // 2. Fetch from productService.getCategories()
-            try {
-                const pCatRes = await productService.getCategories();
-                const pBody = pCatRes?.data ?? pCatRes;
-                const pList = Array.isArray(pBody)
-                    ? pBody
-                    : Array.isArray(pBody?.data)
-                    ? pBody.data
-                    : Array.isArray(pBody?.items)
-                    ? pBody.items
-                    : Array.isArray(pBody?.categories)
-                    ? pBody.categories
-                    : [];
-                if (pList.length > 0) {
-                    catList.push(...pList);
+                        // 1. Fetch from category.getAll()
+                        try {
+                            const response = await category.getAll();
+                            const body = response?.data ?? response;
+                            const list = Array.isArray(body)
+                                ? body
+                                : Array.isArray(body?.data)
+                                ? body.data
+                                : Array.isArray(body?.items)
+                                ? body.items
+                                : Array.isArray(body?.categories)
+                                ? body.categories
+                                : [];
+                            if (list.length > 0) {
+                                fetched = list;
+                            }
+                        } catch (err) {
+                            console.warn("category.getAll error, attempting fallback:", err);
+                        }
+
+                        // 2. Fallback to productService.getCategories() ONLY if category.getAll() returned empty or failed
+                        if (fetched.length === 0) {
+                            try {
+                                const pCatRes = await productService.getCategories();
+                                const pBody = pCatRes?.data ?? pCatRes;
+                                const pList = Array.isArray(pBody)
+                                    ? pBody
+                                    : Array.isArray(pBody?.data)
+                                    ? pBody.data
+                                    : Array.isArray(pBody?.items)
+                                    ? pBody.items
+                                    : Array.isArray(pBody?.categories)
+                                    ? pBody.categories
+                                    : [];
+                                if (pList.length > 0) {
+                                    fetched = pList;
+                                }
+                            } catch (pErr) {
+                                console.warn("productService.getCategories fallback error:", pErr);
+                            }
+                        }
+
+                        return fetched;
+                    })().finally(() => {
+                        inFlightCategoriesPromiseRef.current = null;
+                    });
                 }
-            } catch (pErr) {
-                console.warn("productService.getCategories error:", pErr);
+
+                catList = await inFlightCategoriesPromiseRef.current;
+                rawCategoriesRef.current = catList;
             }
 
             // Normalize and deduplicate categories
@@ -3114,7 +3137,7 @@ const Inventory = () => {
 
     const fetchSuppliers = async () => {
         try {
-            let response = await getSuppliers().catch(() => null);
+            let response = await getSuppliers({ page_size: 100 }).catch(() => getSuppliers().catch(() => null));
             let data = getArrayFromResponse(response);
 
             if (!Array.isArray(data) || data.length === 0) {
@@ -3757,7 +3780,7 @@ const fetchValuation = async () => {
                 fetchStores(),
                 fetchWarehouses(),
                 fetchProducts(),
-                fetchCategories(),
+                fetchCategories(null, true),
                 fetchSuppliers(),
                 fetchPurchaseOrders(),
                 fetchDashboard(),
@@ -4675,6 +4698,9 @@ if (action === "transfer") {
                             fmt={fmt}
                             setStockModal={
                                 setStockModal
+                            }
+                            suppliers={
+                                suppliers
                             }
                             onView={(item) =>
                                 setViewProductModal(item)
