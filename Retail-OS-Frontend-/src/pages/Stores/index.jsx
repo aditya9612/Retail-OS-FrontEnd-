@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import storeService from '../../services/storeService';
 import storeTargetService from '../../services/storeTargetService';
 import notificationService from '../../utils/notificationService';
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from '../../components/Common/PageComponents';
 import '../../components/Categories/CategoryCards.css';
 import {
     BsBullseye,
@@ -1068,7 +1069,7 @@ const Stores = () => {
                     const list = Array.isArray(data) ? data : (data?.items || []);
                     if (list.length > 0) setStores(list);
                 })
-                .catch(() => {});
+                .catch(() => { });
         }
     }, [stores.length]);
 
@@ -1347,21 +1348,8 @@ const Stores = () => {
     };
 
     return (
-        <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto', fontFamily: 'inherit' }}>
+        <PageContainer>
             <style>{`
-                .store-targets-cards {
-                    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-                }
-                @media (max-width: 1100px) {
-                    .store-targets-cards {
-                        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-                    }
-                }
-                @media (max-width: 600px) {
-                    .store-targets-cards {
-                        grid-template-columns: 1fr !important;
-                    }
-                }
                 .store-targets-filter-row {
                     display: flex !important;
                     align-items: center !important;
@@ -1441,65 +1429,49 @@ const Stores = () => {
             {activeTab === 'stores' && (
                 <div>
                     {/* Header */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 16,
-                        marginBottom: 24,
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{
-                                width: 40, height: 40, borderRadius: 12,
-                                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: '#fff', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)'
-                            }}>
-                                <BsShop size={22} />
-                            </div>
-                            <div>
-                                <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                                    Stores Directory
-                                </h1>
-                                <p style={{ fontSize: 13, color: '#64748b', margin: '3px 0 0' }}>
-                                    Manage branch locations, warehouses, staff and store details (<code>/api/v1/stores</code>)
-                                </p>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                            <button
-                                onClick={fetchStores}
-                                disabled={storesLoading}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 14px', borderRadius: 10,
-                                    background: '#fff', border: '1px solid #e2e8f0',
-                                    color: '#475569', fontSize: 13, fontWeight: 600,
-                                    cursor: 'pointer', transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsArrowRepeat size={14} className={storesLoading ? 'spin-anim' : ''} />
-                                <span>Refresh</span>
-                            </button>
-
-                            <button
-                                onClick={openCreateStore}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 18px', borderRadius: 10,
-                                    background: '#4f46e5', border: 'none',
-                                    color: '#fff', fontSize: 13, fontWeight: 700,
-                                    cursor: 'pointer', boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsPlus size={18} />
-                                <span>Add Store</span>
-                            </button>
-                        </div>
-                    </div>
+                    <PageHeader
+                        title="Stores Directory"
+                        subtitle={
+                            <span>
+                                Manage branch locations, warehouses, staff and store details (<code>/api/v1/stores</code>)
+                            </span>
+                        }
+                        icon={<BsShop />}
+                        actions={
+                            <>
+                                <button
+                                    onClick={fetchStores}
+                                    disabled={storesLoading}
+                                    className="adm-btn-secondary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 14px', borderRadius: 8,
+                                        background: '#fff', border: '1px solid #e2e8f0',
+                                        color: '#475569', fontSize: 13, fontWeight: 600,
+                                        cursor: 'pointer', transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsArrowRepeat size={14} className={storesLoading ? 'spin-anim' : ''} />
+                                    <span>Refresh</span>
+                                </button>
+                                <button
+                                    onClick={openCreateStore}
+                                    className="adm-btn-primary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 18px', borderRadius: 8,
+                                        background: '#2563eb', border: 'none',
+                                        color: '#fff', fontSize: 13, fontWeight: 700,
+                                        cursor: 'pointer', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsPlus size={18} />
+                                    <span>Add Store</span>
+                                </button>
+                            </>
+                        }
+                    />
 
                     {/* Notification Alerts for Stores Directory */}
                     {successMsg && (
@@ -1527,89 +1499,48 @@ const Stores = () => {
                     )}
 
                     {/* Stores KPI Overview Cards - Interactive Clickable Cards */}
-                    <div className="category-cards">
-                        <div
-                            className="category-card"
-                            title={storeKpiFilter === 'all' ? "Showing all stores" : "Click to view all stores"}
+                    <KpiGrid columns={4}>
+                        <KpiCard
+                            variant="revenue"
+                            icon={<BsShop />}
+                            title="Total Stores"
+                            value={stores.length}
+                            subtitle={storeKpiFilter === 'all' ? '● All registered stores' : 'Click to show all'}
+                            tooltip={storeKpiFilter === 'all' ? "Showing all stores" : "Click to view all stores"}
+                            active={storeKpiFilter === 'all'}
                             onClick={() => setStoreKpiFilter('all')}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: storeKpiFilter === 'all' ? '2px solid #4f46e5' : '1px solid #e2e8f0',
-                                background: storeKpiFilter === 'all' ? '#eef2ff' : '#fff',
-                                boxShadow: storeKpiFilter === 'all' ? '0 6px 18px rgba(79, 70, 229, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: storeKpiFilter === 'all' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Total Stores</h3>
-                            <h2>{stores.length}</h2>
-                            <span style={{ fontSize: 11, color: storeKpiFilter === 'all' ? '#4338ca' : '#10b981', fontWeight: 600, marginTop: 4 }}>
-                                {storeKpiFilter === 'all' ? '● All registered stores' : 'Click to show all'}
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title={storeKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active branches"}
+                        />
+                        <KpiCard
+                            variant="profit"
+                            icon={<BsCheckCircleFill />}
+                            title="Active Branches"
+                            value={stores.filter(s => s.is_active).length}
+                            subtitle={storeKpiFilter === 'active' ? '● Filtering active outlets' : 'Operational outlets'}
+                            tooltip={storeKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active branches"}
+                            active={storeKpiFilter === 'active'}
                             onClick={() => setStoreKpiFilter(prev => prev === 'active' ? 'all' : 'active')}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: storeKpiFilter === 'active' ? '2px solid #10b981' : '1px solid #e2e8f0',
-                                background: storeKpiFilter === 'active' ? '#ecfdf5' : '#fff',
-                                boxShadow: storeKpiFilter === 'active' ? '0 6px 18px rgba(16, 185, 129, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: storeKpiFilter === 'active' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Active Branches</h3>
-                            <h2>{stores.filter(s => s.is_active).length}</h2>
-                            <span style={{ fontSize: 11, color: storeKpiFilter === 'active' ? '#047857' : '#64748b', fontWeight: storeKpiFilter === 'active' ? 700 : 500, marginTop: 4 }}>
-                                {storeKpiFilter === 'active' ? '● Filtering active outlets' : 'Operational outlets'}
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title={storeKpiFilter === 'warehouse' ? "Click to remove filter" : "Click to filter warehouses"}
+                        />
+                        <KpiCard
+                            variant="margin"
+                            icon={<BsBuilding />}
+                            title="Warehouses"
+                            value={stores.filter(s => s.is_warehouse).length}
+                            subtitle={storeKpiFilter === 'warehouse' ? '● Filtering warehouses' : 'Fulfillment & storage depots'}
+                            tooltip={storeKpiFilter === 'warehouse' ? "Click to remove filter" : "Click to filter warehouses"}
+                            active={storeKpiFilter === 'warehouse'}
                             onClick={() => setStoreKpiFilter(prev => prev === 'warehouse' ? 'all' : 'warehouse')}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: storeKpiFilter === 'warehouse' ? '2px solid #7c3aed' : '1px solid #e2e8f0',
-                                background: storeKpiFilter === 'warehouse' ? '#f5f3ff' : '#fff',
-                                boxShadow: storeKpiFilter === 'warehouse' ? '0 6px 18px rgba(124, 58, 237, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: storeKpiFilter === 'warehouse' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Warehouses</h3>
-                            <h2>{stores.filter(s => s.is_warehouse).length}</h2>
-                            <span style={{ fontSize: 11, color: storeKpiFilter === 'warehouse' ? '#6d28d9' : '#64748b', fontWeight: storeKpiFilter === 'warehouse' ? 700 : 500, marginTop: 4 }}>
-                                {storeKpiFilter === 'warehouse' ? '● Filtering warehouses' : 'Fulfillment & storage depots'}
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title={storeKpiFilter === 'main' ? "Click to remove filter" : "Click to filter primary main store"}
+                        />
+                        <KpiCard
+                            variant="customers"
+                            icon={<BsStarFill />}
+                            title="Primary Main Store"
+                            value={stores.find(s => s.is_main)?.name || 'None Set'}
+                            subtitle={storeKpiFilter === 'main' ? '● Filtering main store' : (stores.find(s => s.is_main) ? `Code: ${stores.find(s => s.is_main)?.code || 'MAIN'}` : 'Designate a main store')}
+                            tooltip={storeKpiFilter === 'main' ? "Click to remove filter" : "Click to filter primary main store"}
+                            active={storeKpiFilter === 'main'}
                             onClick={() => setStoreKpiFilter(prev => prev === 'main' ? 'all' : 'main')}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: storeKpiFilter === 'main' ? '2px solid #f59e0b' : '1px solid #e2e8f0',
-                                background: storeKpiFilter === 'main' ? '#fffbeb' : '#fff',
-                                boxShadow: storeKpiFilter === 'main' ? '0 6px 18px rgba(245, 158, 11, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: storeKpiFilter === 'main' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Primary Main Store</h3>
-                            <h2 style={{ fontSize: 20, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {stores.find(s => s.is_main)?.name || 'None Set'}
-                            </h2>
-                            <span style={{ fontSize: 11, color: storeKpiFilter === 'main' ? '#b45309' : '#64748b', fontWeight: storeKpiFilter === 'main' ? 700 : 500, marginTop: 4 }}>
-                                {storeKpiFilter === 'main' ? '● Filtering main store' : (stores.find(s => s.is_main) ? `Code: ${stores.find(s => s.is_main)?.code || 'MAIN'}` : 'Designate a main store')}
-                            </span>
-                        </div>
-                    </div>
+                        />
+                    </KpiGrid>
 
                     {/* Filter and Search Bar (Requirement 10) */}
                     <div style={{
@@ -1925,66 +1856,47 @@ const Stores = () => {
             {activeTab === 'targets' && (
                 <div>
                     {/* Header */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 16,
-                        marginBottom: 24,
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{
-                                width: 40, height: 40, borderRadius: 12,
-                                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: '#fff', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)'
-                            }}>
-                                <BsBullseye size={22} />
-                            </div>
-                            <div>
-                                <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                                    Store Targets
-                                </h1>
-                                <p style={{ fontSize: 13, color: '#64748b', margin: '3px 0 0' }}>
-                                    Manage revenue, orders and performance milestones across all stores
-                                </p>
-                            </div>
-                        </div>
+                    <PageHeader
+                        title="Store Targets"
+                        subtitle="Manage revenue, orders and performance milestones across all stores"
+                        icon={<BsBullseye />}
+                        actions={
+                            <>
+                                <button
+                                    onClick={fetchTargets}
+                                    disabled={targetsLoading}
+                                    className="adm-btn-secondary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 14px', borderRadius: 8,
+                                        background: '#fff', border: '1px solid #e2e8f0',
+                                        color: '#475569', fontSize: 13, fontWeight: 600,
+                                        cursor: 'pointer', transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsArrowRepeat size={14} className={targetsLoading ? 'spin-anim' : ''} />
+                                    <span>Refresh</span>
+                                </button>
 
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                            <button
-                                onClick={fetchTargets}
-                                disabled={targetsLoading}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 14px', borderRadius: 10,
-                                    background: '#fff', border: '1px solid #e2e8f0',
-                                    color: '#475569', fontSize: 13, fontWeight: 600,
-                                    cursor: 'pointer', transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsArrowRepeat size={14} className={targetsLoading ? 'spin-anim' : ''} />
-                                <span>Refresh</span>
-                            </button>
-
-                            <button
-                                id="create-target-btn"
-                                onClick={openCreateTarget}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 18px', borderRadius: 10,
-                                    background: '#4f46e5', border: 'none',
-                                    color: '#fff', fontSize: 13, fontWeight: 700,
-                                    cursor: 'pointer', boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsPlus size={18} />
-                                <span>Create Target</span>
-                            </button>
-                        </div>
-                    </div>
+                                <button
+                                    id="create-target-btn"
+                                    onClick={openCreateTarget}
+                                    className="adm-btn-primary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 18px', borderRadius: 8,
+                                        background: '#2563eb', border: 'none',
+                                        color: '#fff', fontSize: 13, fontWeight: 700,
+                                        cursor: 'pointer', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsPlus size={18} />
+                                    <span>Create Target</span>
+                                </button>
+                            </>
+                        }
+                    />
 
                     {/* Notification Alerts for Store Targets */}
                     {successMsg && (
@@ -2012,89 +1924,48 @@ const Stores = () => {
                     )}
 
                     {/* Stats Overview - Interactive Clickable KPI Cards (Requirement 18) */}
-                    <div className="category-cards store-targets-cards">
-                        <div
-                            className="category-card"
-                            title={targetKpiFilter === 'all' ? "Showing all targets" : "Click to view all targets"}
+                    <KpiGrid columns={4}>
+                        <KpiCard
+                            variant="revenue"
+                            icon={<BsBullseye />}
+                            title="Total Targets"
+                            value={targets.length}
+                            subtitle={targetKpiFilter === 'all' ? '● All configured targets' : 'Click to show all'}
+                            tooltip={targetKpiFilter === 'all' ? "Showing all targets" : "Click to view all targets"}
+                            active={targetKpiFilter === 'all'}
                             onClick={() => { setTargetKpiFilter('all'); setTargetsView('list'); setTargetPage(1); }}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: targetKpiFilter === 'all' ? '2px solid #4f46e5' : '1px solid #e2e8f0',
-                                background: targetKpiFilter === 'all' ? '#eef2ff' : '#fff',
-                                boxShadow: targetKpiFilter === 'all' ? '0 6px 18px rgba(79, 70, 229, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: targetKpiFilter === 'all' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Total Targets</h3>
-                            <h2>{targets.length}</h2>
-                            <span style={{ fontSize: 11, color: targetKpiFilter === 'all' ? '#4338ca' : '#64748b', fontWeight: 600, marginTop: 4 }}>
-                                {targetKpiFilter === 'all' ? '● All configured targets' : 'Click to show all'}
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title={targetKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active targets"}
+                        />
+                        <KpiCard
+                            variant="profit"
+                            icon={<BsClockHistory />}
+                            title="Active Targets"
+                            value={targets.filter(t => (t.status || 'active').toLowerCase() === 'active').length}
+                            subtitle={targetKpiFilter === 'active' ? '● Filtering active targets' : 'Active milestones'}
+                            tooltip={targetKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active targets"}
+                            active={targetKpiFilter === 'active'}
                             onClick={() => { setTargetKpiFilter(prev => prev === 'active' ? 'all' : 'active'); setTargetsView('list'); setTargetPage(1); }}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: targetKpiFilter === 'active' ? '2px solid #10b981' : '1px solid #e2e8f0',
-                                background: targetKpiFilter === 'active' ? '#ecfdf5' : '#fff',
-                                boxShadow: targetKpiFilter === 'active' ? '0 6px 18px rgba(16, 185, 129, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: targetKpiFilter === 'active' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Active Targets</h3>
-                            <h2>{targets.filter(t => (t.status || 'active').toLowerCase() === 'active').length}</h2>
-                            <span style={{ fontSize: 11, color: targetKpiFilter === 'active' ? '#047857' : '#10b981', fontWeight: targetKpiFilter === 'active' ? 700 : 600, marginTop: 4 }}>
-                                {targetKpiFilter === 'active' ? '● Filtering active targets' : 'Active milestones'}
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title={targetKpiFilter === 'revenue' ? "Click to remove filter" : "Click to view revenue & sales targets"}
+                        />
+                        <KpiCard
+                            variant="margin"
+                            icon={<BsCashStack />}
+                            title="Total Target Value"
+                            value={`₹${displayTotalRevenueTarget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            subtitle={targetKpiFilter === 'revenue' ? '● Filtering revenue targets' : (targetsSummary?.overall_achievement_percentage ? `${targetsSummary.overall_achievement_percentage}% overall reached` : 'Sum of store goals')}
+                            tooltip={targetKpiFilter === 'revenue' ? "Click to remove filter" : "Click to view revenue & sales targets"}
+                            active={targetKpiFilter === 'revenue'}
                             onClick={() => { setTargetKpiFilter(prev => prev === 'revenue' ? 'all' : 'revenue'); setTargetsView('list'); setTargetPage(1); }}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: targetKpiFilter === 'revenue' ? '2px solid #0ea5e9' : '1px solid #e2e8f0',
-                                background: targetKpiFilter === 'revenue' ? '#f0f9ff' : '#fff',
-                                boxShadow: targetKpiFilter === 'revenue' ? '0 6px 18px rgba(14, 165, 233, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: targetKpiFilter === 'revenue' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Total Target Value</h3>
-                            <h2 style={{ fontSize: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                ₹{displayTotalRevenueTarget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </h2>
-                            <span style={{ fontSize: 11, color: targetKpiFilter === 'revenue' ? '#0369a1' : '#64748b', fontWeight: targetKpiFilter === 'revenue' ? 700 : 500, marginTop: 4 }}>
-                                {targetKpiFilter === 'revenue' ? '● Filtering revenue targets' : (targetsSummary?.overall_achievement_percentage ? `${targetsSummary.overall_achievement_percentage}% overall reached` : 'Sum of store goals')}
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title={targetKpiFilter === 'completed' ? "Click to remove filter" : "Click to filter completed targets"}
+                        />
+                        <KpiCard
+                            variant="customers"
+                            icon={<BsTrophy />}
+                            title="Completed Targets"
+                            value={targets.filter(t => (t.status || '').toLowerCase() === 'completed').length}
+                            subtitle={targetKpiFilter === 'completed' ? '● Filtering completed targets' : 'Fully reached milestones'}
+                            tooltip={targetKpiFilter === 'completed' ? "Click to remove filter" : "Click to filter completed targets"}
+                            active={targetKpiFilter === 'completed'}
                             onClick={() => { setTargetKpiFilter(prev => prev === 'completed' ? 'all' : 'completed'); setTargetsView('list'); setTargetPage(1); }}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                border: targetKpiFilter === 'completed' ? '2px solid #8b5cf6' : '1px solid #e2e8f0',
-                                background: targetKpiFilter === 'completed' ? '#f5f3ff' : '#fff',
-                                boxShadow: targetKpiFilter === 'completed' ? '0 6px 18px rgba(139, 92, 246, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                transform: targetKpiFilter === 'completed' ? 'translateY(-2px)' : 'none',
-                            }}
-                        >
-                            <h3>Completed Targets</h3>
-                            <h2>{targets.filter(t => (t.status || '').toLowerCase() === 'completed').length}</h2>
-                            <span style={{ fontSize: 11, color: targetKpiFilter === 'completed' ? '#6d28d9' : '#6366f1', fontWeight: targetKpiFilter === 'completed' ? 700 : 500, marginTop: 4 }}>
-                                {targetKpiFilter === 'completed' ? '● Filtering completed targets' : 'Fully reached milestones'}
-                            </span>
-                        </div>
-                    </div>
+                        />
+                    </KpiGrid>
 
                     {/* Filter Bar & View Toggle - Single Horizontal Row (Requirement) */}
                     <div
@@ -2580,14 +2451,14 @@ const Stores = () => {
                                                             padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
                                                             background:
                                                                 (item.status || 'active').toLowerCase() === 'active' ? '#ecfdf5' :
-                                                                (item.status || '').toLowerCase() === 'completed' ? '#e0e7ff' :
-                                                                (item.status || '').toLowerCase() === 'cancelled' ? '#fef2f2' :
-                                                                '#f1f5f9',
+                                                                    (item.status || '').toLowerCase() === 'completed' ? '#e0e7ff' :
+                                                                        (item.status || '').toLowerCase() === 'cancelled' ? '#fef2f2' :
+                                                                            '#f1f5f9',
                                                             color:
                                                                 (item.status || 'active').toLowerCase() === 'active' ? '#059669' :
-                                                                (item.status || '').toLowerCase() === 'completed' ? '#4338ca' :
-                                                                (item.status || '').toLowerCase() === 'cancelled' ? '#dc2626' :
-                                                                '#64748b',
+                                                                    (item.status || '').toLowerCase() === 'completed' ? '#4338ca' :
+                                                                        (item.status || '').toLowerCase() === 'cancelled' ? '#dc2626' :
+                                                                            '#64748b',
                                                             textTransform: 'capitalize'
                                                         }}>
                                                             {item.status || 'active'}
@@ -3311,7 +3182,7 @@ const Stores = () => {
                                             Assigned Staff ({storeStaff.length})
                                         </h4>
                                         {storeStaff.length === 0 ? (
-                                             <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>
+                                            <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>
                                                 No employees directly assigned to this branch yet.
                                             </div>
                                         ) : (
@@ -3814,7 +3685,7 @@ const Stores = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </PageContainer>
     );
 };
 

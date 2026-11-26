@@ -2,13 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsChevronLeft, BsChevronRight, BsToggleOn, BsToggleOff, BsImage,
-    BsStarFill, BsGrid3X3Gap, BsArrowCounterclockwise, BsEye
+    BsStarFill, BsGrid3X3Gap, BsArrowCounterclockwise, BsEye,
+    BsBoxSeam, BsTagFill, BsClockHistory
 } from 'react-icons/bs';
 import productService from "../../services/product";
 import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 import ProductVariantModal from "./ProductVariantModal";
 import "../../components/Categories/CategoryCards.css";
+import "../../components/Common/PageComponents.css";
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from "../../components/Common/PageComponents";
 import notificationService from "../../utils/notificationService";
 
 export const fetchDatabaseCategories = async () => {
@@ -3048,12 +3051,7 @@ const Products = () => {
     };
 
     return (
-        <div style={{
-            padding: '20px 24px',
-            background: '#f8f9fb',
-            minHeight: '100vh',
-            fontFamily: 'inherit'
-        }}>
+        <PageContainer>
             <style>
                 {`
                 input[type="number"]::-webkit-inner-spin-button,
@@ -3169,182 +3167,84 @@ const Products = () => {
                 `}
             </style>
 
-            {/* 1. TOP HEADER */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                marginBottom: 16,
-                flexWrap: 'wrap',
-                gap: 12
-            }}>
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 22 }}>🛒</span>
-                        <h2 style={{
-                            fontSize: 22,
-                            fontWeight: 700,
-                            color: '#111827',
-                            margin: 0
-                        }}>
-                            Product Master
-                        </h2>
-                    </div>
-                    <p style={{
-                        fontSize: 13,
-                        color: '#6b7280',
-                        marginTop: 4,
-                        marginBottom: 0
-                    }}>
-                        Manage your POS product catalog, pricing and tax settings
-                    </p>
-                </div>
+            {/* 1. TOP HEADER - Dashboard Standard PageHeader */}
+            <PageHeader
+                title="Product Master"
+                subtitle="Manage your POS product catalog, pricing and tax settings"
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            onClick={exportCSV}
+                            title="Export products to CSV"
+                        >
+                            <BsDownload size={14} />
+                            Export
+                        </button>
 
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    flexWrap: 'wrap'
-                }}>
-                    <button
-                        className="adm-btn-secondary"
-                        onClick={exportCSV}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 16px',
-                            background: '#fff',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            color: '#374151'
-                        }}
-                    >
-                        <BsDownload size={14} />
-                        Export
-                    </button>
+                        <button
+                            type="button"
+                            className="adm-btn-primary"
+                            onClick={() => setShowVariantModal(true)}
+                            title="Manage product variants"
+                        >
+                            <BsGrid3X3Gap size={14} />
+                            Product Variant
+                        </button>
 
-                    <button
-                        className="adm-btn-primary"
-                        onClick={() => setShowVariantModal(true)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 16px',
-                            background: '#6366f1',
-                            border: 'none',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            color: '#fff'
-                        }}
-                    >
-                        <BsGrid3X3Gap size={14} />
-                        Product Variant
-                    </button>
+                        <button
+                            type="button"
+                            className="adm-btn-primary"
+                            onClick={() => setModal('new')}
+                            title="Create a new product"
+                        >
+                            <BsPlus size={18} />
+                            Add Product
+                        </button>
+                    </>
+                }
+            />
 
-                    <button
-                        className="adm-btn-primary"
-                        onClick={() => setModal('new')}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 18px',
-                            background: '#6366f1',
-                            border: 'none',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            color: '#fff'
-                        }}
-                    >
-                        <BsPlus size={18} />
-                        Add Product
-                    </button>
-                </div>
-            </div>
-
-            {/* 2. KPI METRIC CARDS (ALL IN 1 SINGLE ROW - CATEGORIES DESIGN) */}
-            <div className="category-cards">
-                {/* Total Products */}
-                <div
-                    className={`category-card ${kpiFilter === 'all' ? 'active-card' : ''}`}
+            {/* 2. KPI METRIC CARDS - Standard Dashboard KpiGrid & KpiCard */}
+            <KpiGrid columns={4}>
+                <KpiCard
+                    variant="revenue"
+                    icon={<BsBoxSeam />}
+                    title="Total Products"
+                    value={kpiStats.total}
+                    subtitle="In product catalog"
+                    active={kpiFilter === 'all'}
                     onClick={() => setKpiFilter('all')}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setKpiFilter('all');
-                        }
-                    }}
-                    title="Click to view all products"
-                >
-                    <h3>Total Products</h3>
-                    <h2>{kpiStats.total}</h2>
-                </div>
-
-                {/* Featured */}
-                <div
-                    className={`category-card ${kpiFilter === 'featured' ? 'active-card' : ''}`}
+                />
+                <KpiCard
+                    variant="profit"
+                    icon={<BsStarFill />}
+                    title="Featured"
+                    value={kpiStats.featured}
+                    subtitle="Promoted catalog items"
+                    active={kpiFilter === 'featured'}
                     onClick={() => setKpiFilter(prev => prev === 'featured' ? 'all' : 'featured')}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setKpiFilter(prev => prev === 'featured' ? 'all' : 'featured');
-                        }
-                    }}
-                    title="Click to filter featured products"
-                >
-                    <h3>Featured</h3>
-                    <h2>{kpiStats.featured}</h2>
-                </div>
-
-                {/* Categories */}
-                <div
-                    className={`category-card ${kpiFilter === 'categories' ? 'active-card' : ''}`}
+                />
+                <KpiCard
+                    variant="margin"
+                    icon={<BsTagFill />}
+                    title="Categories"
+                    value={kpiStats.categories}
+                    subtitle="Product groupings"
+                    active={kpiFilter === 'categories'}
                     onClick={() => setKpiFilter(prev => prev === 'categories' ? 'all' : 'categories')}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setKpiFilter(prev => prev === 'categories' ? 'all' : 'categories');
-                        }
-                    }}
-                    title="Click to filter products with category"
-                >
-                    <h3>Categories</h3>
-                    <h2>{kpiStats.categories}</h2>
-                </div>
-
-                {/* Expiry Soon */}
-                <div
-                    className={`category-card ${kpiFilter === 'expirySoon' ? 'active-card' : ''}`}
+                />
+                <KpiCard
+                    variant="cost"
+                    icon={<BsClockHistory />}
+                    title="Expiry Soon"
+                    value={kpiStats.expirySoon}
+                    subtitle="Near expiration threshold"
+                    active={kpiFilter === 'expirySoon'}
                     onClick={() => setKpiFilter(prev => prev === 'expirySoon' ? 'all' : 'expirySoon')}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setKpiFilter(prev => prev === 'expirySoon' ? 'all' : 'expirySoon');
-                        }
-                    }}
-                    title="Click to view products expiring within 30 days"
-                >
-                    <h3>Expiry Soon</h3>
-                    <h2>{kpiStats.expirySoon}</h2>
-                </div>
-            </div>
+                />
+            </KpiGrid>
 
             {/* 3. SEARCH BAR, CATEGORY FILTER & SOFT DELETED PRODUCTS IN SINGLE HORIZONTAL ROW */}
             <div style={{
@@ -4424,7 +4324,7 @@ const Products = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </PageContainer>
     );
 };
 export default Products;

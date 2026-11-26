@@ -21,6 +21,7 @@ import CategoryTable, { formatCategoryName } from "../../components/Categories/C
 import CategoryModel from "../../components/Categories/CategoryModel";
 import CategoryHeader from "../../components/Categories/CategoryHeader";
 import CategoryFilters from "../../components/Categories/CategoryFilters";
+import { PageContainer } from "../../components/Common/PageComponents";
 
 import "./CategoryManagement.css";
 
@@ -299,10 +300,10 @@ const CategoryManagement = () => {
       const productList = Array.isArray(productsData?.items)
         ? productsData.items
         : Array.isArray(productsData)
-        ? productsData
-        : Array.isArray(productsData?.data)
-        ? productsData.data
-        : [];
+          ? productsData
+          : Array.isArray(productsData?.data)
+            ? productsData.data
+            : [];
 
       // Build product count map by category_id
       const productCountsByCat = {};
@@ -316,9 +317,9 @@ const CategoryManagement = () => {
       const mapCategoryItem = (item) => {
         let status = normalizeStatus(
           item.status ??
-            item.category_status ??
-            item.is_active ??
-            item.active
+          item.category_status ??
+          item.is_active ??
+          item.active
         );
 
         const productCount = productCountsByCat[item.id] !== undefined
@@ -336,10 +337,10 @@ const CategoryManagement = () => {
           status: status === "active" ? "Active" : "Inactive",
           created: item.created_at
             ? new Date(item.created_at).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
             : "-",
           description:
             item.description ??
@@ -353,10 +354,10 @@ const CategoryManagement = () => {
       const apiData = Array.isArray(response.data)
         ? response.data
         : Array.isArray(response.data?.data)
-        ? response.data.data
-        : Array.isArray(response.data?.items)
-        ? response.data.items
-        : [];
+          ? response.data.data
+          : Array.isArray(response.data?.items)
+            ? response.data.items
+            : [];
 
       let apiCategories = apiData.map(mapCategoryItem);
 
@@ -372,10 +373,10 @@ const CategoryManagement = () => {
         const allData = Array.isArray(allCatsResponse.value.data)
           ? allCatsResponse.value.data
           : Array.isArray(allCatsResponse.value.data?.data)
-          ? allCatsResponse.value.data.data
-          : Array.isArray(allCatsResponse.value.data?.items)
-          ? allCatsResponse.value.data.items
-          : [];
+            ? allCatsResponse.value.data.data
+            : Array.isArray(allCatsResponse.value.data?.items)
+              ? allCatsResponse.value.data.items
+              : [];
         setAllCategories(allData.map(mapCategoryItem));
       }
 
@@ -456,8 +457,8 @@ const CategoryManagement = () => {
       const treeData = Array.isArray(res?.data?.data)
         ? res.data.data
         : Array.isArray(res?.data)
-        ? res.data
-        : [];
+          ? res.data
+          : [];
       setCategoryTree(treeData);
     } catch (err) {
       console.error("Failed to load category tree:", err);
@@ -569,8 +570,8 @@ const CategoryManagement = () => {
             errorMsg = typeof parsed.detail === "string"
               ? parsed.detail
               : Array.isArray(parsed.detail)
-              ? parsed.detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
-              : JSON.stringify(parsed.detail);
+                ? parsed.detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
+                : JSON.stringify(parsed.detail);
           } else if (parsed?.message) {
             errorMsg = parsed.message;
           }
@@ -707,8 +708,8 @@ const CategoryManagement = () => {
         errorMsg = typeof detail === "string"
           ? detail
           : Array.isArray(detail)
-          ? detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
-          : JSON.stringify(detail);
+            ? detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
+            : JSON.stringify(detail);
       } else if (error?.response?.data?.message) {
         errorMsg = error.response.data.message;
       } else if (error?.message) {
@@ -775,10 +776,10 @@ const CategoryManagement = () => {
         previousCategories.map((categoryItem) =>
           categoryItem.id === item.id
             ? {
-                ...categoryItem,
-                status: nextStatus,
-                is_active: nextIsActive,
-              }
+              ...categoryItem,
+              status: nextStatus,
+              is_active: nextIsActive,
+            }
             : categoryItem
         )
       );
@@ -805,8 +806,8 @@ const CategoryManagement = () => {
         errorMsg = typeof detail === "string"
           ? detail
           : Array.isArray(detail)
-          ? detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
-          : JSON.stringify(detail);
+            ? detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(", ")
+            : JSON.stringify(detail);
       } else if (error?.response?.data?.message) {
         errorMsg = error.response.data.message;
       } else if (error?.message) {
@@ -929,12 +930,12 @@ const CategoryManagement = () => {
           previousCategories.map((categoryItem) =>
             categoryItem.id === selectedCategory.id
               ? {
-                  ...categoryItem,
-                  name: payload.name,
-                  description: payload.description,
-                  status: nextStatus,
-                  is_active: nextIsActive,
-                }
+                ...categoryItem,
+                name: payload.name,
+                description: payload.description,
+                status: nextStatus,
+                is_active: nextIsActive,
+              }
               : categoryItem
           )
         );
@@ -994,7 +995,7 @@ const CategoryManagement = () => {
   ========================================================= */
 
   return (
-    <div className="category-management-page">
+    <PageContainer className="category-management-page">
 
       {/* =====================================================
           HEADER
@@ -1173,11 +1174,10 @@ const CategoryManagement = () => {
               <button
                 key={page}
                 type="button"
-                className={`category-pagination-btn ${
-                  currentPage === page
+                className={`category-pagination-btn ${currentPage === page
                     ? "active"
                     : ""
-                }`}
+                  }`}
                 onClick={() =>
                   setCurrentPage(page)
                 }
@@ -1230,7 +1230,7 @@ const CategoryManagement = () => {
         />
       )}
 
-    </div>
+    </PageContainer>
   );
 };
 

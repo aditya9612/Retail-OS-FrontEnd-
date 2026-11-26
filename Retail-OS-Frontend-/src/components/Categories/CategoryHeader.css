@@ -8,28 +8,24 @@
   max-width: 100%;
   min-width: 0;
 
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "left actions";
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
 
-  column-gap: 24px;
-  row-gap: 18px;
+  margin: 0 0 4px;
+  padding: 0;
 
-  margin: 0 0 14px;
-  padding: 18px 22px;
+  background: transparent;
 
-  background: #ffffff;
+  border: none;
+  border-radius: 0;
 
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.03),
-    0 5px 15px rgba(15, 23, 42, 0.04);
+  box-shadow: none;
 
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 

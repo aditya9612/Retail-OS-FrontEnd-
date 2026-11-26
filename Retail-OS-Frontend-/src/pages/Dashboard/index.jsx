@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import '../../components/Categories/CategoryCards.css';
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from '../../components/Common/PageComponents';
 import {
     ResponsiveContainer,
     BarChart,
@@ -1628,16 +1629,12 @@ const Dashboard = () => {
     }, [effectiveRevCostMetrics]);
 
     return (
-        <div className="dashboard-container">
+        <PageContainer>
             {/* ── Top Header Area ── */}
-            <header className="dashboard-header">
-                <div className="dashboard-title-wrap">
-                    <h1 className="dashboard-title">Dashboard</h1>
-                    <p className="dashboard-subtitle">
-                        Overview of your store performance and key metrics
-                    </p>
-                </div>
-            </header>
+            <PageHeader
+                title="Dashboard"
+                subtitle="Overview of your store performance and key metrics"
+            />
 
             {/* Error Notification with Interactive Retry */}
             {error && (
@@ -1657,132 +1654,74 @@ const Dashboard = () => {
             )}
 
             {/* ── Financial Performance Summary Cards (5 Cards - Dedicated Total Sales + Existing Cards) ── */}
-            <div className="category-cards kpi-cards-grid" aria-label="Financial Performance Indicators">
+            <KpiGrid columns={5} ariaLabel="Financial Performance Indicators">
                 {/* 1. Dedicated Total Sales */}
-                <div className="category-card kpi-category-card total-sales" title={`Total Sales (${totalSalesSubtitle})`}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                            <h3>Total Sales</h3>
-                            {loading ? (
-                                <div className="skeleton-box" style={{ width: 110, height: 26, margin: '4px 0' }} />
-                            ) : (
-                                <h2>{formatCurrency(totalSalesKpiAmount)}</h2>
-                            )}
-                            <span className="kpi-subtitle trend-up" style={{ fontSize: 11, color: '#2563eb', fontWeight: 600, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                <BsCalendar3 style={{ display: 'inline', fontSize: 10 }} />
-                                {totalSalesSubtitle}
-                            </span>
-                        </div>
-                        <div className="kpi-icon-wrap total-sales">
-                            <BsCashStack />
-                        </div>
-                    </div>
-                </div>
+                <KpiCard
+                    variant="total-sales"
+                    title="Total Sales"
+                    value={formatCurrency(totalSalesKpiAmount)}
+                    subtitle={totalSalesSubtitle}
+                    subtitleIcon={<BsCalendar3 style={{ display: 'inline', fontSize: 10 }} />}
+                    subtitleColor="#2563eb"
+                    icon={<BsCashStack />}
+                    loading={loading}
+                    tooltip={`Total Sales (${totalSalesSubtitle})`}
+                />
 
                 {/* 2. Total Sales / Revenue (Period-based) */}
-                <Link to="/reports" className="category-card kpi-category-card revenue" title="View Sales Reports">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                            <h3>Total Revenue</h3>
-                            {loading ? (
-                                <div className="skeleton-box" style={{ width: 110, height: 26, margin: '4px 0' }} />
-                            ) : (
-                                <h2>{formatCurrency(totalRevenueKpiAmount)}</h2>
-                            )}
-                            <span className="kpi-subtitle trend-up" style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                <BsArrowUp style={{ display: 'inline' }} />
-                                {totalRevenueSubtitle}
-                            </span>
-                        </div>
-                        <div className="kpi-icon-wrap revenue">
-                            <BsCashStack />
-                        </div>
-                    </div>
-                </Link>
+                <KpiCard
+                    to="/reports"
+                    variant="revenue"
+                    title="Total Revenue"
+                    value={formatCurrency(totalRevenueKpiAmount)}
+                    subtitle={totalRevenueSubtitle}
+                    subtitleIcon={<BsArrowUp style={{ display: 'inline' }} />}
+                    subtitleColor="#10b981"
+                    icon={<BsCashStack />}
+                    loading={loading}
+                    tooltip="View Sales Reports"
+                />
 
-                {/* 2. Total Cost (COGS) */}
-                <button
-                    type="button"
-                    className="category-card kpi-category-card cost"
-                    title="Click to view Cost of Goods Sold (COGS) breakdown and accounting formula"
+                {/* 3. Total Cost (COGS) */}
+                <KpiCard
+                    variant="cost"
+                    title="Total Cost (COGS)"
+                    value={formatCurrency(financialMetrics.cost)}
+                    subtitle="Cost of Goods Sold • Click for details"
+                    subtitleColor="#64748b"
+                    icon={<BsTagFill />}
+                    loading={loading}
                     onClick={() => setActiveMetricModal('cost')}
-                    aria-haspopup="dialog"
-                    aria-label={`Total Cost (COGS): ${formatCurrency(financialMetrics.cost)}. Click to view calculation and breakdown.`}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                            <h3>Total Cost (COGS)</h3>
-                            {loading ? (
-                                <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
-                            ) : (
-                                <h2>{formatCurrency(financialMetrics.cost)}</h2>
-                            )}
-                            <span className="kpi-subtitle" style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                Cost of Goods Sold &bull; Click for details
-                            </span>
-                        </div>
-                        <div className="kpi-icon-wrap cost">
-                            <BsTagFill />
-                        </div>
-                    </div>
-                </button>
+                    tooltip="Click to view Cost of Goods Sold (COGS) breakdown and accounting formula"
+                />
 
-                {/* 3. Gross Profit */}
-                <button
-                    type="button"
-                    className="category-card kpi-category-card profit"
-                    title="Click to view Gross Profit breakdown and accounting formula"
+                {/* 4. Gross Profit */}
+                <KpiCard
+                    variant="profit"
+                    title="Gross Profit"
+                    value={formatCurrency(financialMetrics.grossProfit)}
+                    valueColor={financialMetrics.grossProfit >= 0 ? '#059669' : '#dc2626'}
+                    subtitle="Net Sales − COGS • Click for details"
+                    subtitleColor="#64748b"
+                    icon={<BsGraphUpArrow />}
+                    loading={loading}
                     onClick={() => setActiveMetricModal('profit')}
-                    aria-haspopup="dialog"
-                    aria-label={`Gross Profit: ${formatCurrency(financialMetrics.grossProfit)}. Click to view formula and breakdown.`}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                            <h3>Gross Profit</h3>
-                            {loading ? (
-                                <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
-                            ) : (
-                                <h2 style={{ color: financialMetrics.grossProfit >= 0 ? '#059669' : '#dc2626' }}>
-                                    {formatCurrency(financialMetrics.grossProfit)}
-                                </h2>
-                            )}
-                            <span className="kpi-subtitle" style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                Net Sales &minus; COGS &bull; Click for details
-                            </span>
-                        </div>
-                        <div className="kpi-icon-wrap profit">
-                            <BsGraphUpArrow />
-                        </div>
-                    </div>
-                </button>
+                    tooltip="Click to view Gross Profit breakdown and accounting formula"
+                />
 
-                {/* 4. Gross Profit Margin (%) */}
-                <button
-                    type="button"
-                    className="category-card kpi-category-card margin"
-                    title="Click to view Gross Profit Margin and Markup breakdown"
+                {/* 5. Gross Profit Margin (%) */}
+                <KpiCard
+                    variant="margin"
+                    title="Gross Profit Margin"
+                    value={`${financialMetrics.grossMargin.toFixed(2)}%`}
+                    subtitle={`Markup: ${financialMetrics.markup.toFixed(2)}% • Click for details`}
+                    subtitleColor="#64748b"
+                    icon={<BsPercent />}
+                    loading={loading}
                     onClick={() => setActiveMetricModal('margin')}
-                    aria-haspopup="dialog"
-                    aria-label={`Gross Profit Margin: ${financialMetrics.grossMargin.toFixed(2)}%. Click to view formula and breakdown.`}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                            <h3>Gross Profit Margin</h3>
-                            {loading ? (
-                                <div className="skeleton-box" style={{ width: 80, height: 26, margin: '4px 0' }} />
-                            ) : (
-                                <h2>{`${financialMetrics.grossMargin.toFixed(2)}%`}</h2>
-                            )}
-                            <span className="kpi-subtitle" style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                Markup: {`${financialMetrics.markup.toFixed(2)}%`} &bull; Click for details
-                            </span>
-                        </div>
-                        <div className="kpi-icon-wrap margin">
-                            <BsPercent />
-                        </div>
-                    </div>
-                </button>
-            </div>
+                    tooltip="Click to view Gross Profit Margin and Markup breakdown"
+                />
+            </KpiGrid>
 
             {/* ── Operational Quick Metrics Strip ── */}
             <section className="operational-strip" aria-label="Operational Metrics">
@@ -2801,7 +2740,7 @@ const Dashboard = () => {
                     </div>,
                     document.body
                 )}
-        </div>
+        </PageContainer>
     );
 };
 

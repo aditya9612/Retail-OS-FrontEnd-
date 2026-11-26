@@ -1,4 +1,6 @@
 import React from "react";
+import { BsFolderFill, BsCheckCircleFill, BsXCircleFill, BsBoxSeam } from "react-icons/bs";
+import { KpiGrid, KpiCard } from "../Common/PageComponents";
 import "./CategoryCards.css";
 
 const CategoryCards = ({ categories = [], statusFilter = "All", onCardClick }) => {
@@ -64,27 +66,39 @@ const CategoryCards = ({ categories = [], statusFilter = "All", onCardClick }) =
     {
       title: "Total Categories",
       value: totalCategories,
+      subtitle: "In category catalog",
+      variant: "revenue",
+      icon: <BsFolderFill />,
       filterKey: "All",
     },
     {
       title: "Active Categories",
       value: activeCategories,
+      subtitle: "Currently enabled",
+      variant: "profit",
+      icon: <BsCheckCircleFill />,
       filterKey: "Active",
     },
     {
       title: "Inactive Categories",
       value: inactiveCategories,
+      subtitle: "Disabled categories",
+      variant: "cost",
+      icon: <BsXCircleFill />,
       filterKey: "Inactive",
     },
     {
       title: "Total Products",
       value: totalProducts,
+      subtitle: "Active category items",
+      variant: "margin",
+      icon: <BsBoxSeam />,
       filterKey: "Products",
     },
   ];
 
   return (
-    <div className="category-cards">
+    <KpiGrid columns={4}>
       {cards.map((card, index) => {
         const isCardActive =
           (card.filterKey === "All" && statusFilter === "All") ||
@@ -93,26 +107,19 @@ const CategoryCards = ({ categories = [], statusFilter = "All", onCardClick }) =
           (card.filterKey === "Products" && (statusFilter === "Products" || statusFilter === "With Products"));
 
         return (
-          <div
-            className={`category-card ${isCardActive ? "active-card" : ""}`}
+          <KpiCard
             key={index}
+            variant={card.variant}
+            icon={card.icon}
+            title={card.title}
+            value={card.value}
+            subtitle={card.subtitle}
+            active={isCardActive}
             onClick={() => onCardClick && onCardClick(card.filterKey, card.title)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onCardClick && onCardClick(card.filterKey, card.title);
-              }
-            }}
-            title={`Click to filter by ${card.title}`}
-          >
-            <h3>{card.title}</h3>
-            <h2>{card.value}</h2>
-          </div>
+          />
         );
       })}
-    </div>
+    </KpiGrid>
   );
 };
 
