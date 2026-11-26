@@ -13,12 +13,7 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-
-  padding: 0;
-
   box-sizing: border-box;
-
-  overflow-x: hidden;
 }
 
 .category-management-page * {
@@ -59,28 +54,24 @@
    HORIZONTAL SCROLLBAR
 ========================================================= */
 
-.category-management-page
-  .category-table-container::-webkit-scrollbar {
+.category-management-page .category-table-container::-webkit-scrollbar {
   height: 8px;
 }
 
-.category-management-page
-  .category-table-container::-webkit-scrollbar-track {
+.category-management-page .category-table-container::-webkit-scrollbar-track {
   background: #f8fafc;
 
   border-radius: 0 0 10px 10px;
 }
 
-.category-management-page
-  .category-table-container::-webkit-scrollbar-thumb {
+.category-management-page .category-table-container::-webkit-scrollbar-thumb {
   background: #cbd5e1;
 
   border: 2px solid #f8fafc;
   border-radius: 999px;
 }
 
-.category-management-page
-  .category-table-container::-webkit-scrollbar-thumb:hover {
+.category-management-page .category-table-container::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 

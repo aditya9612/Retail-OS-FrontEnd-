@@ -166,8 +166,15 @@
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .dropdown-item {
@@ -225,9 +232,20 @@
 }
 
 @keyframes pulse {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
 }
 
 .live-refresh-btn {
@@ -1010,8 +1028,13 @@ button.kpi-card {
 }
 
 @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1047,6 +1070,7 @@ button.kpi-card {
         opacity: 0;
         transform: translateY(-6px) scale(0.98);
     }
+
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -1338,6 +1362,7 @@ button.kpi-card {
         opacity: 0;
         transform: translateY(14px) scale(0.98);
     }
+
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -1591,10 +1616,12 @@ button.kpi-card {
         box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6);
         border-color: #2563eb;
     }
+
     70% {
         box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
         border-color: #2563eb;
     }
+
     100% {
         box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
         border-color: #e2e8f0;
@@ -1777,29 +1804,94 @@ button.kpi-card {
 }
 
 
-/* ── Product Master KPI Card Styles Integration ── */
+/* ── Standardized KPI Card Grid Styles (Full Width, Zero Right Gap) ── */
 .kpi-cards-grid {
-    margin: 0 0 4px 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 0 14px 0 !important;
+    padding: 0 !important;
     display: grid !important;
+    gap: 14px !important;
+    box-sizing: border-box !important;
+    align-items: stretch !important;
+}
+
+/* 4-Column Grid: Product Master, Category Management, Stores Directory, Store Targets */
+.kpi-cards-grid.kpi-grid-cols-4,
+.kpi-cards-grid:not(.kpi-grid-cols-5):not(.kpi-grid-cols-3):not(.kpi-grid-cols-2):not(.kpi-grid-cols-1) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 1100px) {
+
+    .kpi-cards-grid.kpi-grid-cols-4,
+    .kpi-cards-grid:not(.kpi-grid-cols-5):not(.kpi-grid-cols-3):not(.kpi-grid-cols-2):not(.kpi-grid-cols-1) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+}
+
+@media (max-width: 600px) {
+
+    .kpi-cards-grid.kpi-grid-cols-4,
+    .kpi-cards-grid:not(.kpi-grid-cols-5):not(.kpi-grid-cols-3):not(.kpi-grid-cols-2):not(.kpi-grid-cols-1) {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+}
+
+/* 5-Column Grid: Dashboard */
+.kpi-cards-grid.kpi-grid-cols-5 {
+    gap: 14px !important;
+    box-sizing: border-box !important;
+    align-items: stretch !important;
+}
+
+/* 4-Column Grid: Product Master, Category Management, Stores Directory, Store Targets */
+.kpi-cards-grid.kpi-grid-cols-4,
+.kpi-cards-grid:not(.kpi-grid-cols-5):not(.kpi-grid-cols-3):not(.kpi-grid-cols-2):not(.kpi-grid-cols-1) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 1100px) {
+    .kpi-cards-grid.kpi-grid-cols-4,
+    .kpi-cards-grid:not(.kpi-grid-cols-5):not(.kpi-grid-cols-3):not(.kpi-grid-cols-2):not(.kpi-grid-cols-1) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+}
+
+@media (max-width: 600px) {
+    .kpi-cards-grid.kpi-grid-cols-4,
+    .kpi-cards-grid:not(.kpi-grid-cols-5):not(.kpi-grid-cols-3):not(.kpi-grid-cols-2):not(.kpi-grid-cols-1) {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+}
+
+/* 5-Column Grid: Dashboard */
+.kpi-cards-grid.kpi-grid-cols-5 {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    gap: 14px;
 }
 
 @media (max-width: 1400px) {
-    .kpi-cards-grid {
+    .kpi-cards-grid.kpi-grid-cols-5 {
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 12px !important;
     }
 }
 
 @media (max-width: 992px) {
-    .kpi-cards-grid {
+    .kpi-cards-grid.kpi-grid-cols-5 {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
     }
 }
 
 @media (max-width: 576px) {
-    .kpi-cards-grid {
+    .kpi-cards-grid.kpi-grid-cols-5 {
         grid-template-columns: 1fr !important;
+        gap: 10px !important;
     }
 }
 
@@ -1817,22 +1909,76 @@ a.category-card {
     color: inherit;
 }
 
-.kpi-category-card.total-sales::before { background: #2563eb; }
-.kpi-category-card.total-sales h2 { color: #1d4ed8; }
-.kpi-category-card.total-sales::after { background: rgba(37, 99, 235, 0.04); }
+.kpi-category-card.total-sales::before {
+    background: #2563eb;
+}
+
+.kpi-category-card.total-sales h2 {
+    color: #1d4ed8;
+}
+
+.kpi-category-card.total-sales::after {
+    background: rgba(37, 99, 235, 0.04);
+}
+
 .kpi-icon-wrap.total-sales {
     background-color: #eff6ff;
     color: #2563eb;
 }
-.kpi-category-card.revenue::before { background: #6366f1; }
-.kpi-category-card.cost::before { background: #ef4444; }
-.kpi-category-card.profit::before { background: #10b981; }
-.kpi-category-card.margin::before { background: #8b5cf6; }
 
-.kpi-category-card.revenue h2 { color: #4338ca; }
-.kpi-category-card.cost h2 { color: #dc2626; }
-.kpi-category-card.profit h2 { color: #059669; }
-.kpi-category-card.margin h2 { color: #7c3aed; }
+.kpi-category-card.revenue::before {
+    background: #6366f1;
+}
+
+.kpi-category-card.cost::before {
+    background: #ef4444;
+}
+
+.kpi-category-card.profit::before {
+    background: #10b981;
+}
+
+.kpi-category-card.margin::before {
+    background: #8b5cf6;
+}
+
+.kpi-category-card.revenue h2 {
+    color: #4338ca;
+}
+
+.kpi-category-card.cost h2 {
+    color: #dc2626;
+}
+
+.kpi-category-card.profit h2 {
+    color: #059669;
+}
+
+.kpi-category-card.margin h2 {
+    color: #7c3aed;
+}
+
+.kpi-category-card.customers::before { background: #f59e0b; }
+.kpi-category-card.customers h2 { color: #d97706; }
+.kpi-category-card.customers::after { background: rgba(245, 158, 11, 0.04); }
+.kpi-icon-wrap.customers {
+    background-color: #fffbeb;
+    color: #f59e0b;
+}
+
+.kpi-category-card.warning::before { background: #f59e0b; }
+.kpi-category-card.warning h2 { color: #d97706; }
+.kpi-icon-wrap.warning {
+    background-color: #fffbeb;
+    color: #f59e0b;
+}
+
+.kpi-category-card.info::before { background: #0ea5e9; }
+.kpi-category-card.info h2 { color: #0284c7; }
+.kpi-icon-wrap.info {
+    background-color: #f0f9ff;
+    color: #0ea5e9;
+}
 
 .kpi-category-card::after {
     content: "";
@@ -1844,10 +1990,29 @@ a.category-card {
     border-radius: 50%;
     pointer-events: none;
 }
-.kpi-category-card.revenue::after { background: rgba(99, 102, 241, 0.035); }
-.kpi-category-card.cost::after { background: rgba(239, 68, 68, 0.04); }
-.kpi-category-card.profit::after { background: rgba(16, 185, 129, 0.04); }
-.kpi-category-card.margin::after { background: rgba(139, 92, 246, 0.04); }
+
+.kpi-category-card.revenue::after {
+    background: rgba(99, 102, 241, 0.035);
+}
+
+.kpi-category-card.cost::after {
+    background: rgba(239, 68, 68, 0.04);
+}
+
+.kpi-category-card.profit::after {
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.kpi-category-card.margin::after {
+    background: rgba(139, 92, 246, 0.04);
+}
+
+.category-card.active-card,
+.kpi-category-card.active-card {
+    border-color: #6366f1 !important;
+    background-color: #fcfcff !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), 0 4px 12px rgba(15, 23, 42, 0.05) !important;
+}
 
 .adm-btn-secondary:hover {
     background: #f9fafb !important;

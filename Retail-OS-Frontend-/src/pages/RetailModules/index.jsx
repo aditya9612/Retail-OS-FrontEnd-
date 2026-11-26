@@ -17,6 +17,9 @@ import './Warehouse.css';
 import './StoreTransfers.css';
 import { getStoreTransfers, getStoreTransfersSummary, getStoreTransferById, approveStoreTransfer, rejectStoreTransfer, dispatchStoreTransfer, receiveStoreTransfer, receiveStoreTransferWithDiscrepancy, checkStoreActiveStatus } from '../../services/storeTransferService';
 import notificationService from '../../utils/notificationService';
+import '../../components/Common/PageComponents.css';
+import '../../components/Categories/CategoryCards.css';
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from '../../components/Common/PageComponents';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
@@ -30,111 +33,36 @@ import {
 
 
 /* ─────────────────────────────────────────────────────────────
-   Shared Module Header & Wrapper
+   Shared Module Header & Wrapper — Standardized against Dashboard
 ───────────────────────────────────────────────────────────── */
 
 
 const ModuleContainer = ({ title, subtitle, icon, actionBtn, children }) => (
-    <div style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto' }}>
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 16,
-            marginBottom: 24,
-            paddingBottom: 20,
-            borderBottom: '1px solid #e5e7eb'
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    background: '#eef2ff',
-                    color: '#6366f1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 22
-                }}>
-                    {icon}
-                </div>
-                <div>
-                    <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
-                        {title}
-                    </h1>
-                    <p style={{ fontSize: 13, color: '#6b7280', margin: '3px 0 0 0' }}>
-                        {subtitle}
-                    </p>
-                </div>
-            </div>
-            {actionBtn && <div>{actionBtn}</div>}
-        </div>
+    <PageContainer>
+        <PageHeader
+            title={title}
+            subtitle={subtitle}
+            icon={icon}
+            actions={actionBtn}
+        />
         {children}
-    </div>
+    </PageContainer>
 );
 
 const StatCard = ({ label, value, sub, color = '#6366f1' }) => {
     const isValueBox = label === "Total Stock Value" || (typeof value === "string" && value.includes("₹"));
+    const dynamicFontSize = isValueBox
+        ? (String(value).length >= 14 ? 18 : String(value).length >= 11 ? 20 : 22)
+        : undefined;
+
     return (
-        <div style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: '16px 20px',
-            border: '1px solid #e5e7eb',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            flex: 1,
-            minWidth: 180,
-            maxWidth: '100%',
-            overflow: 'hidden',
-            boxSizing: 'border-box'
-        }}>
-            <p style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#6b7280',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: 6,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-            }}>
-                {label}
-            </p>
-            <p
-                title={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
-                style={{
-                    fontSize: isValueBox
-                        ? (String(value).length >= 14 ? 18 : String(value).length >= 11 ? 20 : 22)
-                        : 24,
-                    fontWeight: 800,
-                    color: '#111827',
-                    margin: 0,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '100%',
-                    boxSizing: 'border-box'
-                }}
-            >
-                {value}
-            </p>
-            {sub && (
-                <p style={{
-                    fontSize: 12,
-                    color,
-                    margin: '4px 0 0 0',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                }}>
-                    {sub}
-                </p>
-            )}
-        </div>
+        <KpiCard
+            title={label}
+            value={dynamicFontSize ? <span style={{ fontSize: dynamicFontSize }}>{value}</span> : value}
+            subtitle={sub}
+            accentColor={color}
+            tooltip={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+        />
     );
 };
 
