@@ -1537,9 +1537,13 @@ const Employees = () => {
                     variant="revenue"
 
                     icon={<BsPeopleFill />}
+<<<<<<< HEAD
 
                     title="Total Employees"
 
+=======
+                    title="Total Staff"
+>>>>>>> Punam
                     value={kpiStats.total}
 
                     subtitle="All registered staff members"
@@ -1553,9 +1557,13 @@ const Employees = () => {
                         setPage(1);
 
                     }}
+<<<<<<< HEAD
 
                     tooltip="Click to view all registered employees"
 
+=======
+                    tooltip="Click to view all registered staff"
+>>>>>>> Punam
                 />
 
                 <KpiCard
@@ -1563,9 +1571,13 @@ const Employees = () => {
                     variant="profit"
 
                     icon={<BsCheckCircleFill />}
+<<<<<<< HEAD
 
                     title="Active Employees"
 
+=======
+                    title="Active Staff"
+>>>>>>> Punam
                     value={kpiStats.active}
 
                     subtitle="Operational staff members"
@@ -1579,9 +1591,13 @@ const Employees = () => {
                         setPage(1);
 
                     }}
+<<<<<<< HEAD
 
                     tooltip="Click to filter by active employees"
 
+=======
+                    tooltip="Click to filter by active staff"
+>>>>>>> Punam
                 />
 
                 <KpiCard
@@ -1589,9 +1605,13 @@ const Employees = () => {
                     variant="cost"
 
                     icon={<BsXCircleFill />}
+<<<<<<< HEAD
 
                     title="Inactive Employees"
 
+=======
+                    title="Inactive Staff"
+>>>>>>> Punam
                     value={kpiStats.inactive}
 
                     subtitle="Deactivated user credentials"
@@ -1605,9 +1625,13 @@ const Employees = () => {
                         setPage(1);
 
                     }}
+<<<<<<< HEAD
 
                     tooltip="Click to filter by inactive employees"
 
+=======
+                    tooltip="Click to filter by inactive staff"
+>>>>>>> Punam
                 />
 
                 <KpiCard
