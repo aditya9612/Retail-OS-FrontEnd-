@@ -22,14 +22,7 @@ const DashboardLayout = () => {
                 <main
                     style={{
                         flex: 1,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        minHeight: 0,
-                        width: '100%',
-                        maxWidth: '100%',
-                        minWidth: 0,
-                        overflowY: currentPath === '/billing' ? 'hidden' : 'scroll',
-                        overflowX: currentPath === '/billing' ? 'hidden' : 'auto',
+                        overflowY: currentPath === '/billing' ? 'hidden' : 'auto',
                     }}
                     className="custom-scrollbar"
                 >
