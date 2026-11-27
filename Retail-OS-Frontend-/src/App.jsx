@@ -8,6 +8,7 @@ import {
     Navigate,
 } from 'react-router-dom';
 
+import { NotificationProvider } from './context/NotificationContext';
 import DashboardLayout from './layouts/DashboardLayout';
 
 // Core Pages
@@ -69,7 +70,8 @@ function App() {
     return (
         <ErrorBoundary>
             <Router>
-                <Routes>
+                <NotificationProvider>
+                    <Routes>
 
                 {/* Login page */}
                 <Route
@@ -202,16 +204,17 @@ function App() {
                     }
                 />
 
-            </Routes>
-            <ToastContainer
-                position="top-right"
-                autoClose={3000}
-                hideProgressBar={false}
-                newestOnTop
-                closeOnClick
-                pauseOnHover
-                theme="colored"
-            />
+                </Routes>
+                <ToastContainer
+                    position="top-right"
+                    autoClose={3000}
+                    hideProgressBar={false}
+                    newestOnTop
+                    closeOnClick
+                    pauseOnHover
+                    theme="colored"
+                />
+            </NotificationProvider>
         </Router>
         </ErrorBoundary>
     );

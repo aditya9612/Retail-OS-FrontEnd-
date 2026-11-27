@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import {
     BsShop,
+    BsGrid1X2Fill,
     BsCalendar3,
     BsChevronDown,
     BsChevronLeft,
@@ -1634,6 +1635,7 @@ const Dashboard = () => {
             <PageHeader
                 title="Dashboard"
                 subtitle="Overview of your store performance and key metrics"
+                icon={<BsGrid1X2Fill />}
             />
 
             {/* Error Notification with Interactive Retry */}
