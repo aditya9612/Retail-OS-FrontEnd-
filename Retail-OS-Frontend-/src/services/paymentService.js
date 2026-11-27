@@ -179,23 +179,63 @@ export const refundPayment = async (paymentId) => {
 };
 
 /**
- * 7. GET /api/v1/payments/qr/{order_id} - Dynamic UPI QR Payload
- * Safely handles unseeded order IDs with valid Indian UPI payload string
+ * 7. GET /api/v1/payments/qr/{order_id} - Dynamic UPI QR Code
+ * Generates dynamic UPI QR code. Supports delivery modes: 'json', 'preview', 'download'.
+ * @param {number|string} [orderId=1]
+ * @param {Object|string} [options={}] Custom options or legacy upiId string
+ * @param {number} [options.amount] Custom amount to lock into UPI QR
+ * @param {string} [options.upi_id] Payee VPA / UPI ID (defaults to system/store UPI if omitted)
+ * @param {'json'|'preview'|'download'} [options.mode='json'] Delivery mode
  */
-export const getQrPayload = async (orderId, upiId = 'merchant@upi', amount = 1250.00) => {
-    try {
-        const params = {};
-        if (upiId) params.upi_id = upiId;
-        const res = await apiClient.get(`/payments/qr/${orderId}`, { params });
-        if (res.data) return res.data;
-    } catch (_) {
-        // Fallback when order ID is not yet created in backend DB
+export const getQrPayload = async (orderId = 1, options = {}) => {
+    let amount = null;
+    let upiId = null;
+    let mode = 'json';
+
+    if (typeof options === 'object' && options !== null) {
+        amount = options.amount != null ? Number(options.amount) : null;
+        upiId = options.upi_id || options.upiId || null;
+        mode = options.mode || 'json';
+    } else if (typeof options === 'string') {
+        upiId = options;
+        if (arguments[2] != null) amount = Number(arguments[2]);
     }
 
+    const cleanOrderId = parseInt(orderId, 10) || 1;
+    const params = { mode };
+    if (amount != null && !isNaN(amount) && amount > 0) {
+        params.amount = Number(amount);
+    }
+    if (upiId && String(upiId).trim()) {
+        params.upi_id = String(upiId).trim();
+    }
+
+    try {
+        const res = await apiClient.get(`/payments/qr/${cleanOrderId}`, { params });
+        const data = res.data;
+        if (data) {
+            return {
+                order_id: data.order_id ?? cleanOrderId,
+                upi_id: data.upi_id || upiId || 'store@upi',
+                amount: data.amount != null ? Number(data.amount) : (amount || 0),
+                qr_payload: data.qr_payload || data.qr_string || null,
+                qr_code_base64: data.qr_code_base64 || null,
+            };
+        }
+    } catch (e) {
+        console.warn('[Payments] Dynamic QR API failed or offline, using fallback:', e?.message || e);
+    }
+
+    // Resilient fallback: standard NPCI compliant UPI string
+    const fallbackVpa = upiId || 'merchant@upi';
+    const fallbackAmt = amount != null ? Number(amount) : 0;
+    const fallbackString = `upi://pay?pa=${encodeURIComponent(fallbackVpa)}&pn=RetailStore&am=${fallbackAmt.toFixed(2)}&tr=POS_${cleanOrderId}_${Date.now().toString().slice(-4)}&cu=INR`;
     return {
-        qr_string: `upi://pay?pa=${encodeURIComponent(upiId)}&pn=RetailStore&am=${parseFloat(amount).toFixed(2)}&tr=ORDER_${orderId}&cu=INR`,
-        order_id: orderId,
-        amount: parseFloat(amount),
+        order_id: cleanOrderId,
+        upi_id: fallbackVpa,
+        amount: fallbackAmt,
+        qr_payload: fallbackString,
+        qr_code_base64: null,
     };
 };
 

@@ -258,7 +258,7 @@ const Profile = () => {
     };
 
     return (
-        <div className="dash-page" style={{ paddingBottom: 40, maxWidth: 900, margin: '0 auto' }}>
+        <div className="dash-page dash-page--full" style={{ paddingBottom: 40 }}>
             {/* Page Header */}
             <div className="adm-page-header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
                 <div>
