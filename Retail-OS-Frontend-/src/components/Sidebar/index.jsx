@@ -84,7 +84,7 @@ export const menuGroups = [
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },
             { name: 'GRN', icon: <BsClipboardCheck />, path: '/inventory/grn' },
             { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns' },
-            { name: 'Store Transfers', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
+            { name: 'Store Transfer', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
         ],
     },
     {
@@ -121,7 +121,7 @@ export const menuGroups = [
         id: 'multi_store',
         label: 'MULTI-STORE',
         items: [
-            { name: 'Stores Directory', icon: <BsShop />, path: '/stores' },
+            { name: 'Store', icon: <BsShop />, path: '/stores' },
             { name: 'Store Targets', icon: <BsBullseye />, path: '/stores/targets' },
         ],
     },

@@ -15,7 +15,10 @@ import {
     BsCheckCircleFill,
     BsExclamationCircleFill,
     BsArrowRight,
+    BsCheck2All,
+    BsCheck,
 } from 'react-icons/bs';
+import { useNotifications } from '../../context/NotificationContext';
 import { getDashboardSummary } from '../../services/dashboard';
 import { logoutUser } from '../../services/auth';
 import LogoutConfirmModal from '../LogoutConfirmModal';
@@ -50,55 +53,33 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         location.pathname === '/ecommerce/store';
     const [showProfileMenu, setShowProfileMenu] = useState(false);
 
-    // ── Notifications Popup State ──
+    // ── Global Notifications Context ──
+    const {
+        notifications,
+        unreadCount,
+        markAsRead,
+        markAllAsRead,
+        clearReadNotifications,
+        syncBackendAlerts
+    } = useNotifications();
+
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-    const [notificationSummary, setNotificationSummary] = useState(null);
-    const [systemNotifications, setSystemNotifications] = useState([]);
+    const [notificationTab, setNotificationTab] = useState('all'); // 'all' | 'unread'
     const bellButtonRef = useRef(null);
     const notificationDropdownRef = useRef(null);
 
-    // Listen for global real-time notifications across modules
+    // Refresh notifications / alerts on route change
     useEffect(() => {
-        const handleSystemNotif = (e) => {
-            if (e.detail) {
-                setSystemNotifications((prev) => [e.detail, ...prev.slice(0, 19)]);
-            }
-        };
-        window.addEventListener('retail-os:notification', handleSystemNotif);
-        return () => window.removeEventListener('retail-os:notification', handleSystemNotif);
-    }, []);
+        syncBackendAlerts();
+    }, [location.pathname, syncBackendAlerts]);
 
-    // Fetch dashboard summary for real inventory alerts
-    useEffect(() => {
-        let isMounted = true;
-        getDashboardSummary()
-            .then((data) => {
-                if (isMounted && data) {
-                    setNotificationSummary(data);
-                }
-            })
-            .catch(() => {});
-        return () => {
-            isMounted = false;
-        };
-    }, [location.pathname]);
-
-    // Notification items derived from summary & real-time system notifications
-    const notificationItems = useMemo(() => {
-        const items = [...systemNotifications];
-        if (notificationSummary && notificationSummary.low_stock_products > 0) {
-            items.push({
-                id: 'low-stock-alert',
-                type: 'warning',
-                title: 'Low Stock Alert',
-                message: `${notificationSummary.low_stock_products} ${notificationSummary.low_stock_products === 1 ? 'product is' : 'products are'} running low on inventory and need attention.`,
-                time: 'Requires Action',
-                link: '/inventory',
-                linkText: 'View Inventory',
-            });
+    // Filter items based on active tab
+    const displayNotificationItems = useMemo(() => {
+        if (notificationTab === 'unread') {
+            return notifications.filter(n => !n.isRead);
         }
-        return items;
-    }, [notificationSummary, systemNotifications]);
+        return notifications;
+    }, [notifications, notificationTab]);
 
     // Automatically close notification popup on navigation between pages
     useEffect(() => {
@@ -137,12 +118,25 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         };
     }, [isNotificationOpen]);
 
-    // Handle clicking a notification item: close popup and navigate
+    // Handle clicking a notification item: mark as read, close popup and navigate
     const handleNotificationItemClick = (item) => {
+        markAsRead(item.id);
         setIsNotificationOpen(false);
         if (item.link) {
             navigate(item.link);
         }
+    };
+
+    // Handle inline mark as read
+    const handleInlineMarkRead = (e, item) => {
+        e.stopPropagation();
+        markAsRead(item.id);
+    };
+
+    // Handle mark all as read
+    const handleMarkAllAsRead = (e) => {
+        e.stopPropagation();
+        markAllAsRead();
     };
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -698,7 +692,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                         ref={bellButtonRef}
                         type="button"
                         className={`header-icon-btn header-icon-btn--bell ${isNotificationOpen ? 'active' : ''}`}
-                        title="Notifications"
+                        title={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : "Notifications (All caught up)"}
                         aria-haspopup="dialog"
                         aria-expanded={isNotificationOpen ? 'true' : 'false'}
                         aria-controls="dashboard-notification-panel"
@@ -722,8 +716,9 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                         }}
                     >
                         <BsBell size={17} color="#6366f1" />
-                        {notificationItems.length > 0 && (
+                        {unreadCount > 0 && (
                             <span
+                                className="dashboard-notification-counter-badge"
                                 style={{
                                     position: 'absolute',
                                     top: -3,
@@ -732,16 +727,18 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                                     color: '#ffffff',
                                     fontSize: 10,
                                     fontWeight: 800,
-                                    width: 16,
-                                    height: 16,
+                                    width: 17,
+                                    height: 17,
                                     borderRadius: '50%',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     border: '2px solid #ffffff',
+                                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.35)',
+                                    lineHeight: 1,
                                 }}
                             >
-                                {notificationItems.length}
+                                {unreadCount > 9 ? '9+' : unreadCount}
                             </span>
                         )}
                     </button>
@@ -767,43 +764,136 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                                 <div className="dashboard-notification-title-wrap">
                                     <BsBell className="dashboard-notification-header-icon" />
                                     <h3 className="dashboard-notification-title">Notifications</h3>
-                                    <span className="dashboard-notification-badge">
-                                        {notificationItems.length > 0 ? `${notificationItems.length} New` : '0 New'}
+                                    <span
+                                        className="dashboard-notification-badge"
+                                        style={{
+                                            background: unreadCount > 0 ? '#ef4444' : '#10b981',
+                                            color: '#ffffff',
+                                            fontSize: 10,
+                                            fontWeight: 700,
+                                            padding: '2px 8px',
+                                            borderRadius: 10,
+                                        }}
+                                    >
+                                        {unreadCount > 0 ? `${unreadCount} New` : 'All Caught Up'}
                                     </span>
                                 </div>
-                                <button
-                                    type="button"
-                                    className="dashboard-notification-close-btn"
-                                    onClick={() => {
-                                        setIsNotificationOpen(false);
-                                        if (bellButtonRef.current) bellButtonRef.current.focus();
-                                    }}
-                                    title="Close notifications"
-                                    aria-label="Close notifications"
-                                >
-                                    <BsX size={18} />
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    {unreadCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={handleMarkAllAsRead}
+                                            title="Mark all notifications as read"
+                                            style={{
+                                                background: '#e0e7ff',
+                                                border: 'none',
+                                                color: '#4338ca',
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                padding: '4px 8px',
+                                                borderRadius: 6,
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                                transition: 'background 0.15s ease'
+                                            }}
+                                        >
+                                            <BsCheck2All size={14} />
+                                            <span>Mark read</span>
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="dashboard-notification-close-btn"
+                                        onClick={() => {
+                                            setIsNotificationOpen(false);
+                                            if (bellButtonRef.current) bellButtonRef.current.focus();
+                                        }}
+                                        title="Close notifications"
+                                        aria-label="Close notifications"
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
                             </div>
+
+                            {/* Filter Tabs: All vs Unread */}
+                            {notifications.length > 0 && (
+                                <div style={{
+                                    display: 'flex',
+                                    borderBottom: '1px solid #f1f5f9',
+                                    background: '#f8fafc',
+                                    padding: '4px 8px',
+                                    gap: 4
+                                }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setNotificationTab('all')}
+                                        style={{
+                                            flex: 1,
+                                            padding: '5px 8px',
+                                            fontSize: 11.5,
+                                            fontWeight: notificationTab === 'all' ? 700 : 500,
+                                            color: notificationTab === 'all' ? '#1e293b' : '#64748b',
+                                            background: notificationTab === 'all' ? '#ffffff' : 'transparent',
+                                            border: notificationTab === 'all' ? '1px solid #e2e8f0' : '1px solid transparent',
+                                            borderRadius: 6,
+                                            cursor: 'pointer',
+                                            boxShadow: notificationTab === 'all' ? '0 1px 2px rgba(0,0,0,0.04)' : 'none'
+                                        }}
+                                    >
+                                        All ({notifications.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setNotificationTab('unread')}
+                                        style={{
+                                            flex: 1,
+                                            padding: '5px 8px',
+                                            fontSize: 11.5,
+                                            fontWeight: notificationTab === 'unread' ? 700 : 500,
+                                            color: notificationTab === 'unread' ? '#1e293b' : '#64748b',
+                                            background: notificationTab === 'unread' ? '#ffffff' : 'transparent',
+                                            border: notificationTab === 'unread' ? '1px solid #e2e8f0' : '1px solid transparent',
+                                            borderRadius: 6,
+                                            cursor: 'pointer',
+                                            boxShadow: notificationTab === 'unread' ? '0 1px 2px rgba(0,0,0,0.04)' : 'none'
+                                        }}
+                                    >
+                                        Unread ({unreadCount})
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Notifications List */}
                             <div className="dashboard-notification-list">
-                                {notificationItems.length === 0 ? (
+                                {displayNotificationItems.length === 0 ? (
                                     <div className="dashboard-notification-empty">
                                         <div className="dashboard-notification-empty-icon-wrap">
                                             <BsCheckCircleFill size={22} color="#10b981" />
                                         </div>
-                                        <p className="dashboard-notification-empty-title">All caught up!</p>
+                                        <p className="dashboard-notification-empty-title">
+                                            {notificationTab === 'unread' ? 'No unread notifications' : 'All caught up!'}
+                                        </p>
                                         <p className="dashboard-notification-empty-desc">
-                                            No active inventory alerts or urgent notifications.
+                                            {notificationTab === 'unread'
+                                                ? 'All alerts have been reviewed.'
+                                                : 'No active inventory alerts or urgent notifications.'}
                                         </p>
                                     </div>
                                 ) : (
-                                    notificationItems.map((item) => (
+                                    displayNotificationItems.map((item) => (
                                         <div
                                             key={item.id}
-                                            className={`dashboard-notification-card ${item.type}`}
+                                            className={`dashboard-notification-card ${item.type} ${item.isRead ? 'read' : 'unread'}`}
                                             onClick={() => handleNotificationItemClick(item)}
-                                            style={{ cursor: item.link ? 'pointer' : 'default' }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                background: item.isRead ? '#ffffff' : '#f8fafc',
+                                                borderColor: item.isRead ? '#f1f5f9' : '#cbd5e1',
+                                                position: 'relative'
+                                            }}
                                         >
                                             <div className="dashboard-notification-card-icon">
                                                 {item.type === 'error' ? (
@@ -814,20 +904,71 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                                             </div>
                                             <div className="dashboard-notification-card-body">
                                                 <div className="dashboard-notification-card-header">
-                                                    <span className="dashboard-notification-card-title">{item.title}</span>
-                                                    <span className="dashboard-notification-card-time">{item.time}</span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                                                        {!item.isRead && (
+                                                            <span
+                                                                title="Unread notification"
+                                                                style={{
+                                                                    width: 7,
+                                                                    height: 7,
+                                                                    borderRadius: '50%',
+                                                                    background: '#ef4444',
+                                                                    display: 'inline-block',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <span
+                                                            className="dashboard-notification-card-title"
+                                                            style={{
+                                                                fontWeight: item.isRead ? 600 : 800,
+                                                                color: item.isRead ? '#475569' : '#0f172a'
+                                                            }}
+                                                        >
+                                                            {item.title}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                                        <span className="dashboard-notification-card-time">{item.time}</span>
+                                                        {!item.isRead && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => handleInlineMarkRead(e, item)}
+                                                                title="Mark as read"
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer',
+                                                                    padding: 0,
+                                                                    color: '#94a3b8',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center'
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.color = '#10b981'}
+                                                                onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+                                                            >
+                                                                <BsCheck size={18} />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <p className="dashboard-notification-card-msg">{item.message}</p>
+                                                <p
+                                                    className="dashboard-notification-card-msg"
+                                                    style={{ color: item.isRead ? '#64748b' : '#334155' }}
+                                                >
+                                                    {item.message}
+                                                </p>
                                                 {item.link && (
                                                     <Link
                                                         to={item.link}
                                                         className="dashboard-notification-card-link"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
+                                                            markAsRead(item.id);
                                                             setIsNotificationOpen(false);
                                                         }}
                                                     >
-                                                        <span>{item.linkText}</span>
+                                                        <span>{item.linkText || 'View Details'}</span>
                                                         <BsArrowRight size={12} />
                                                     </Link>
                                                 )}
@@ -838,15 +979,42 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                             </div>
 
                             {/* Footer */}
-                            {notificationItems.length > 0 && (
-                                <div className="dashboard-notification-footer">
+                            {notifications.length > 0 && (
+                                <div
+                                    className="dashboard-notification-footer"
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '10px 16px'
+                                    }}
+                                >
                                     <Link
                                         to="/inventory"
                                         className="dashboard-notification-footer-link"
                                         onClick={() => setIsNotificationOpen(false)}
                                     >
-                                        View inventory items &amp; alerts
+                                        View inventory alerts
                                     </Link>
+                                    {notifications.some(n => n.isRead) && (
+                                        <button
+                                            type="button"
+                                            onClick={clearReadNotifications}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#94a3b8',
+                                                fontSize: 11,
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                padding: 0
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                                            onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+                                        >
+                                            Clear read
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>

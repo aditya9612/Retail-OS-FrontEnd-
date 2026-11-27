@@ -12,6 +12,9 @@ export const auth = {
                 refresh_token: response.data.refresh_token,
                 token_type: response.data.token_type,
             });
+            try {
+                window.dispatchEvent(new CustomEvent('retail-os:auth-change'));
+            } catch {}
         }
 
         return response.data;
@@ -28,6 +31,9 @@ export const auth = {
                 refresh_token: response.data.refresh_token,
                 token_type: response.data.token_type,
             });
+            try {
+                window.dispatchEvent(new CustomEvent('retail-os:auth-change'));
+            } catch {}
         }
 
         return response.data;
@@ -94,6 +100,9 @@ export const auth = {
                 refresh_token: response.data.refresh_token,
                 token_type: response.data.token_type,
             });
+            try {
+                window.dispatchEvent(new CustomEvent('retail-os:auth-change'));
+            } catch {}
         }
 
         return response.data;
@@ -112,6 +121,9 @@ export const auth = {
                 refresh_token: response.data.refresh_token,
                 token_type: response.data.token_type,
             });
+            try {
+                window.dispatchEvent(new CustomEvent('retail-os:auth-change'));
+            } catch {}
         }
 
         return response.data;
@@ -163,6 +175,9 @@ export const auth = {
         } finally {
             clearTokens();
             localStorage.removeItem("user");
+            try {
+                window.dispatchEvent(new CustomEvent('retail-os:auth-change'));
+            } catch {}
         }
     },
 };

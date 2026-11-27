@@ -14,8 +14,8 @@
   gap: 20px;
   flex-wrap: wrap;
 
-  margin: 0 0 4px;
-  padding: 0;
+  margin: 0 0 24px;
+  padding: 0 !important;
 
   background: transparent;
 
@@ -361,10 +361,6 @@
 ========================================================= */
 
 @media (min-width: 1440px) {
-  .category-header {
-    padding: 23px 25px 0;
-  }
-
   .category-header-left h1 {
     font-size: 26px;
     line-height: 34px;
@@ -383,8 +379,6 @@
 @media (max-width: 1200px) {
   .category-header {
     column-gap: 18px;
-
-    padding: 20px 20px 0;
   }
 
   .category-header-left h1 {
@@ -399,19 +393,6 @@
 ========================================================= */
 
 @media (max-width: 900px) {
-  .category-header {
-    grid-template-columns: minmax(0, 1fr);
-
-    grid-template-areas:
-      "left"
-      "actions"
-      "tabs";
-
-    row-gap: 14px;
-
-    padding: 18px 18px 0;
-  }
-
   .category-header-right {
     width: 100%;
 
@@ -436,12 +417,6 @@
 @media (max-width: 640px) {
   .category-header {
     margin-bottom: 14px;
-
-    padding: 15px 14px 0;
-
-    row-gap: 13px;
-
-    border-radius: 10px;
   }
 
   .category-header-left h1 {
@@ -502,12 +477,6 @@
 ========================================================= */
 
 @media (max-width: 420px) {
-  .category-header {
-    padding: 13px 12px 0;
-
-    border-radius: 9px;
-  }
-
   .category-header-left h1 {
     font-size: 18px;
     line-height: 25px;

@@ -3171,6 +3171,7 @@ const Products = () => {
             <PageHeader
                 title="Product Master"
                 subtitle="Manage your POS product catalog, pricing and tax settings"
+                icon={<BsBoxSeam />}
                 actions={
                     <>
                         <button

@@ -25,7 +25,8 @@ import {
     BsArrowLeftRight, BsAwardFill, BsShieldLock, BsMegaphone, BsChatDots,
     BsStars, BsPlug, BsDisplay, BsCashStack, BsArrowReturnLeft, BsReceiptCutoff,
     BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle,
-    BsImage, BsEye
+    BsImage, BsEye, BsShop, BsChevronLeft, BsChevronRight, BsChevronUp, BsChevronDown,
+    BsActivity, BsTable, BsPencilFill, BsTrashFill, BsX, BsTrash, BsCheckCircle, BsXCircle
 } from 'react-icons/bs';
 
 
@@ -11125,7 +11126,7 @@ export const StoreTransfersPage = () => {
                 }
             `}</style>
             <ModuleContainer
-                title="Inter-Store Stock Transfers"
+                title="Store Transfer"
                 subtitle="Transfer products between retail outlets, generate gate passes and track in-transit stock"
                 icon={<BsArrowLeftRight />}
                 actionBtn={
