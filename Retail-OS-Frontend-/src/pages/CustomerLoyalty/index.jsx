@@ -755,7 +755,7 @@ export const CustomerLoyaltyPage = () => {
     };
 
     return (
-        <div className="dash-page" style={{ paddingBottom: 40 }}>
+        <div className="dash-page dash-page--full" style={{ paddingBottom: 40 }}>
             {/* ── Toast Notification Banner ── */}
             {notification && (
                 <div
@@ -1269,7 +1269,7 @@ export const CustomerLoyaltyPage = () => {
             )}
 
             {/* ── Main Customer Loyalty Table Card (Identical Design & Font to Customer Directory) ── */}
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 {/* Search & Filter Bar */}
                 <div style={{ padding: '18px 20px', borderBottom: '1px solid #f3f4f6', background: '#ffffff' }}>
                     {/* Row 1: Search input + Sorter */}
@@ -1474,10 +1474,10 @@ export const CustomerLoyaltyPage = () => {
 
                 {/* Directory Table with Smooth Horizontal Scrolling and Sticky Headers */}
                 <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 270px)', minHeight: 400, position: 'relative', scrollBehavior: 'smooth' }} className="custom-scrollbar">
-                    <table style={{ width: '100%', minWidth: 1360, borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: 13.5 }}>
+                    <table style={{ width: '100%', minWidth: 1360, borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: 13 }}>
                         <thead>
-                            <tr style={{ color: '#374151', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 10px', width: 44, minWidth: 44, textAlign: 'center' }}>
+                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 10px', width: 36, minWidth: 36, textAlign: 'center' }}>
                                     <input
                                         type="checkbox"
                                         checked={isAllPageSelected}
@@ -1486,17 +1486,17 @@ export const CustomerLoyaltyPage = () => {
                                         style={{ cursor: 'pointer', accentColor: '#6366f1' }}
                                     />
                                 </th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 8px', width: 60, minWidth: 60, textAlign: 'center' }}>Sr. No.</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 250, width: 270 }}>Customer Name</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 14px', minWidth: 175, whiteSpace: 'nowrap' }}>Segment & Tier</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 14px', minWidth: 135, whiteSpace: 'nowrap' }}>Phone</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 170, width: 180 }}>Address</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 12px', width: 80, minWidth: 80, textAlign: 'center', whiteSpace: 'nowrap' }}>Orders</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 125, textAlign: 'right', whiteSpace: 'nowrap' }}>Total Spent</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 165, textAlign: 'left', whiteSpace: 'nowrap' }}>Loyalty Balance</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 140, textAlign: 'left', whiteSpace: 'nowrap' }}>Wallet Balance</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 14px', width: 110, minWidth: 110, textAlign: 'center', whiteSpace: 'nowrap' }}>Status</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', width: 240, minWidth: 240, textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 8px', width: 55, minWidth: 55, textAlign: 'center' }}>Sr. No.</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', minWidth: 250, width: 270 }}>Customer Name</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', minWidth: 175, whiteSpace: 'nowrap' }}>Segment & Tier</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', minWidth: 135, whiteSpace: 'nowrap' }}>Phone</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', minWidth: 170, width: 180 }}>Address</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 12px', width: 80, minWidth: 80, textAlign: 'center', whiteSpace: 'nowrap' }}>Orders</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', minWidth: 125, textAlign: 'right', whiteSpace: 'nowrap' }}>Total Spent</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', minWidth: 165, textAlign: 'left', whiteSpace: 'nowrap' }}>Loyalty Balance</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', minWidth: 140, textAlign: 'left', whiteSpace: 'nowrap' }}>Wallet Balance</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', width: 110, minWidth: 110, textAlign: 'center', whiteSpace: 'nowrap' }}>Status</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '9px 14px', width: 220, minWidth: 220, textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1535,7 +1535,7 @@ export const CustomerLoyaltyPage = () => {
                                             }}
                                             className="table-row-hover"
                                         >
-                                            <td style={{ padding: '12px 10px', textAlign: 'center', borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '9px 10px', width: 36, textAlign: 'center', borderBottom: '1px solid #f3f4f6' }}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isRowSelected}
@@ -1544,24 +1544,24 @@ export const CustomerLoyaltyPage = () => {
                                                 />
                                             </td>
 
-                                            <td style={{ padding: '12px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12.5, borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55, borderBottom: '1px solid #f3f4f6' }}>
                                                 {serialNumber}
                                             </td>
 
-                                            <td style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '9px 14px', borderBottom: '1px solid #f3f4f6' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                         {cust.name?.[0]?.toUpperCase() || '?'}
                                                     </div>
                                                     <div style={{ minWidth: 0 }}>
                                                         <p
-                                                            style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 14, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}
+                                                            style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 13, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}
                                                             title={cust.name}
                                                         >
                                                             {cust.name}
                                                         </p>
                                                         <p
-                                                            style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}
+                                                            style={{ fontSize: 11.5, color: '#6b7280', margin: '2px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}
                                                             title={cust.email || 'No email registered'}
                                                         >
                                                             {cust.email || 'No email'}
@@ -1571,16 +1571,16 @@ export const CustomerLoyaltyPage = () => {
                                             </td>
 
                                             {/* Segment & Tier */}
-                                            <td style={{ padding: '12px 14px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                            <td style={{ padding: '9px 14px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-                                                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1', textTransform: 'capitalize' }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1', textTransform: 'capitalize' }}>
                                                         {cust.type}
                                                     </span>
                                                     <span
                                                         style={{
                                                             fontSize: 11,
                                                             fontWeight: 700,
-                                                            padding: '3px 8px',
+                                                            padding: '2px 8px',
                                                             borderRadius: 12,
                                                             background: tierInfo.bg,
                                                             color: tierInfo.color,
@@ -1596,11 +1596,11 @@ export const CustomerLoyaltyPage = () => {
                                                 </div>
                                             </td>
 
-                                            <td style={{ padding: '12px 14px', color: '#374151', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '9px 14px', color: '#374151', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
                                                 {cust.phone || '—'}
                                             </td>
 
-                                            <td style={{ padding: '12px 16px', color: '#374151', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '9px 14px', color: '#374151', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
                                                 <span
                                                     style={{ display: 'inline-block', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: locationText !== '—' ? 'help' : 'default' }}
                                                     title={`Full Location: ${locationText}`}
@@ -1609,29 +1609,29 @@ export const CustomerLoyaltyPage = () => {
                                                 </span>
                                             </td>
 
-                                            <td style={{ padding: '12px 12px', textAlign: 'center', fontWeight: 700, color: '#111827', fontSize: 13.5, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: '#111827', fontSize: 13, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
                                                 {cust.orders ?? 0}
                                             </td>
 
-                                            <td style={{ padding: '12px 16px', fontWeight: 800, color: '#10b981', fontSize: 13.5, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '9px 14px', fontWeight: 800, color: '#10b981', fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
                                                 {fmt(cust.totalSpent)}
                                             </td>
 
                                             {/* Loyalty Points Balance */}
-                                            <td style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                            <td style={{ padding: '9px 14px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
                                                 <div style={{ fontSize: 12.5 }}>
                                                     {points === 0 ? (
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#9ca3af', fontWeight: 600, fontSize: 11.5 }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 7px', borderRadius: 6, background: '#f3f4f6', color: '#9ca3af', fontWeight: 600, fontSize: 11.5 }}>
                                                             <BsCoin size={12} color="#cbd5e1" />
                                                             <span>0 pts</span>
                                                         </div>
                                                     ) : points >= 100 ? (
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontWeight: 800, fontSize: 11.5 }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 7px', borderRadius: 6, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontWeight: 800, fontSize: 11.5 }}>
                                                             <BsCoin size={13} color="#d97706" />
                                                             <span>{points.toLocaleString('en-IN')} pts</span>
                                                         </div>
                                                     ) : (
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 700, fontSize: 11.5 }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 7px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 700, fontSize: 11.5 }}>
                                                             <BsCoin size={13} color="#10b981" />
                                                             <span>{points.toLocaleString('en-IN')} pts</span>
                                                         </div>
@@ -1643,17 +1643,17 @@ export const CustomerLoyaltyPage = () => {
                                             </td>
 
                                             {/* Wallet Balance Column */}
-                                            <td style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                            <td style={{ padding: '9px 14px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                                     <BsWallet2 size={13} style={{ color: '#6366f1' }} />
-                                                    <span style={{ fontWeight: 700, color: '#111827', fontSize: 13.5 }}>
+                                                    <span style={{ fontWeight: 700, color: '#111827', fontSize: 13 }}>
                                                         {fmt(cust.credit || cust.wallet_balance || 0)}
                                                     </span>
                                                 </div>
                                             </td>
 
                                             {/* Status Badge */}
-                                            <td style={{ padding: '12px 14px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                            <td style={{ padding: '9px 14px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
                                                 {(() => {
                                                     const isAct = cust.status === 'Active';
                                                     const bg = isAct ? '#ecfdf5' : '#f3f4f6';
@@ -1668,9 +1668,9 @@ export const CustomerLoyaltyPage = () => {
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
                                                                 gap: 5,
-                                                                fontSize: 11.5,
+                                                                fontSize: 11,
                                                                 fontWeight: 700,
-                                                                padding: '3px 9px',
+                                                                padding: '2px 8px',
                                                                 borderRadius: 12,
                                                                 background: bg,
                                                                 color: color,
@@ -1692,8 +1692,8 @@ export const CustomerLoyaltyPage = () => {
                                             </td>
 
                                             {/* Actions Column */}
-                                            <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                            <td style={{ padding: '9px 14px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                                                     {/* Status Toggle */}
                                                     <span title={cust.status === 'Active' ? 'Deactivate customer account' : 'Activate customer account'}>
                                                         <CustomerStatusToggle
@@ -1709,9 +1709,9 @@ export const CustomerLoyaltyPage = () => {
                                                         title="View customer profile and loyalty details"
                                                         onClick={() => handleViewCustomerProfile(custId)}
                                                         style={{
-                                                            width: 30,
-                                                            height: 30,
-                                                            borderRadius: 7,
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
                                                             border: '1px solid #e5e7eb',
                                                             background: '#ffffff',
                                                             color: '#6366f1',
@@ -1721,6 +1721,8 @@ export const CustomerLoyaltyPage = () => {
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                     >
                                                         <BsEye size={14} />
                                                     </button>
@@ -1731,9 +1733,9 @@ export const CustomerLoyaltyPage = () => {
                                                         title="Edit customer information"
                                                         onClick={() => setEditingCustomer(cust)}
                                                         style={{
-                                                            width: 30,
-                                                            height: 30,
-                                                            borderRadius: 7,
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
                                                             border: '1px solid #e5e7eb',
                                                             background: '#ffffff',
                                                             color: '#374151',
@@ -1743,6 +1745,8 @@ export const CustomerLoyaltyPage = () => {
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                     >
                                                         <BsPencilSquare size={13} />
                                                     </button>
@@ -1753,11 +1757,11 @@ export const CustomerLoyaltyPage = () => {
                                                         title="Credit / Add loyalty points to customer"
                                                         onClick={() => handleOpenModal('earn', cust)}
                                                         style={{
-                                                            width: 30,
-                                                            height: 30,
-                                                            borderRadius: 7,
-                                                            border: '1px solid #a7f3d0',
-                                                            background: '#ecfdf5',
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
                                                             color: '#059669',
                                                             cursor: 'pointer',
                                                             display: 'inline-flex',
@@ -1765,6 +1769,8 @@ export const CustomerLoyaltyPage = () => {
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#ecfdf5'; e.currentTarget.style.borderColor = '#10b981'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                     >
                                                         <BsPlusCircle size={14} />
                                                     </button>
@@ -1776,11 +1782,11 @@ export const CustomerLoyaltyPage = () => {
                                                         onClick={() => handleOpenModal('redeem', cust)}
                                                         disabled={points <= 0}
                                                         style={{
-                                                            width: 30,
-                                                            height: 30,
-                                                            borderRadius: 7,
-                                                            border: `1px solid ${points > 0 ? '#c7d2fe' : '#e5e7eb'}`,
-                                                            background: points > 0 ? '#eef2ff' : '#f9fafb',
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: points > 0 ? '#ffffff' : '#f9fafb',
                                                             color: points > 0 ? '#4f46e5' : '#cbd5e1',
                                                             cursor: points > 0 ? 'pointer' : 'not-allowed',
                                                             display: 'inline-flex',
@@ -1788,6 +1794,8 @@ export const CustomerLoyaltyPage = () => {
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
+                                                        onMouseEnter={e => { if (points > 0) { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; } }}
+                                                        onMouseLeave={e => { if (points > 0) { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; } }}
                                                     >
                                                         <BsGift size={13} />
                                                     </button>
@@ -1798,9 +1806,9 @@ export const CustomerLoyaltyPage = () => {
                                                         title="View loyalty points transaction history"
                                                         onClick={() => handleOpenHistory(cust)}
                                                         style={{
-                                                            width: 30,
-                                                            height: 30,
-                                                            borderRadius: 7,
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
                                                             border: '1px solid #e5e7eb',
                                                             background: '#ffffff',
                                                             color: '#475569',
@@ -1810,6 +1818,8 @@ export const CustomerLoyaltyPage = () => {
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                     >
                                                         <BsClockHistory size={13} />
                                                     </button>
@@ -1824,9 +1834,9 @@ export const CustomerLoyaltyPage = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 10 }}>
                     <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * pageSize + 1 : 0}</strong> to <strong>{Math.min(page * pageSize, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
+                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * pageSize + 1 : 0}</strong> to <strong>{Math.min(page * pageSize, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> records
                     </p>
 
                     <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>

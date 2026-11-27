@@ -107,6 +107,7 @@ function App() {
                         <Route path="/orders/:id" element={<BillingManagement />} />
                         <Route path="/billing/returns" element={<ReturnsRefundsPage />} />
                         <Route path="/billing/credit-notes" element={<CreditNotesPage />} />
+                        <Route path="/credit-notes" element={<CreditNotesPage />} />
                         <Route path="/gst-management" element={<GSTManagement />} />
                         <Route path="/billing/payments" element={<BillingPaymentsPage />} />
 

@@ -73,17 +73,21 @@ export const getCreditNotes = async (params = {}) => {
 /**
  * 2. POST /api/v1/credit-notes - Create Credit Note
  * @param {Object} payload
- * @param {number} payload.invoice_id - Required positive Invoice ID
+ * @param {number|string} payload.invoice_id - Required positive Invoice ID
  * @param {number|string} payload.refund_amount - Required positive refund amount
  * @param {string} [payload.reason] - Optional cancellation/refund reason (min 3, max 500 chars)
+ * @param {number|string} [payload.customer_id] - Optional linked customer ID
+ * @param {number|string} [payload.store_id] - Optional store ID
+ * @param {Array} [payload.items] - Optional item line details
+ * @param {string} [payload.notes] - Optional additional notes
  * @returns {Promise<Object>} CreditNoteResponse
  */
 export const createCreditNote = async (payload = {}) => {
     try {
-        const invoiceId = Number(payload.invoice_id);
-        const refundAmount = Number(payload.refund_amount);
+        const invoiceId = !isNaN(Number(payload.invoice_id)) ? Number(payload.invoice_id) : payload.invoice_id;
+        const refundAmount = Number(payload.refund_amount != null ? payload.refund_amount : payload.amount);
 
-        if (!invoiceId || invoiceId <= 0) {
+        if (!invoiceId) {
             throw new Error('A valid Invoice ID is required to generate a credit note.');
         }
 
@@ -94,10 +98,23 @@ export const createCreditNote = async (payload = {}) => {
         const sanitizedPayload = {
             invoice_id: invoiceId,
             refund_amount: refundAmount,
+            amount: refundAmount,
         };
 
         if (payload.reason && String(payload.reason).trim().length >= 3) {
             sanitizedPayload.reason = String(payload.reason).trim().slice(0, 500);
+        }
+        if (payload.customer_id) {
+            sanitizedPayload.customer_id = Number(payload.customer_id) || payload.customer_id;
+        }
+        if (payload.store_id) {
+            sanitizedPayload.store_id = Number(payload.store_id) || payload.store_id;
+        }
+        if (payload.notes) {
+            sanitizedPayload.notes = String(payload.notes).trim();
+        }
+        if (Array.isArray(payload.items) && payload.items.length > 0) {
+            sanitizedPayload.items = payload.items;
         }
 
         const response = await apiClient.post('/credit-notes', sanitizedPayload);
@@ -214,9 +231,13 @@ export const previewCreditNotePdf = async (creditNoteId) => {
 export const validateCreditNote = async (creditNoteNo, billAmount) => {
     try {
         if (!creditNoteNo) throw new Error('Credit Note number is required.');
+        const cleanNo = String(creditNoteNo).trim();
+        const cleanAmt = Number(billAmount) || 0;
         const response = await apiClient.post('/credit-notes/validate', {
-            credit_note_no: String(creditNoteNo).trim(),
-            bill_amount: Number(billAmount) || 0,
+            credit_note_no: cleanNo,
+            credit_note_number: cleanNo,
+            bill_amount: cleanAmt,
+            amount: cleanAmt,
         });
         return response.data;
     } catch (e) {
@@ -235,17 +256,29 @@ export const validateCreditNote = async (creditNoteNo, billAmount) => {
  */
 export const redeemCreditNote = async (payload) => {
     try {
-        if (!payload.credit_note_no) throw new Error('Credit Note number is required.');
-        if (!payload.amount_to_redeem || Number(payload.amount_to_redeem) <= 0) {
+        const creditNoteNo = String(payload.credit_note_no || payload.credit_note_number || '').trim();
+        const redeemAmt = Number(
+            payload.amount_to_redeem != null 
+                ? payload.amount_to_redeem 
+                : payload.redeem_amount != null 
+                    ? payload.redeem_amount 
+                    : payload.amount
+        );
+
+        if (!creditNoteNo) throw new Error('Credit Note number is required.');
+        if (isNaN(redeemAmt) || redeemAmt <= 0) {
             throw new Error('A positive redemption amount is required.');
         }
 
         const body = {
-            credit_note_no: String(payload.credit_note_no).trim(),
-            amount_to_redeem: Number(payload.amount_to_redeem),
+            credit_note_no: creditNoteNo,
+            credit_note_number: creditNoteNo,
+            amount_to_redeem: redeemAmt,
+            redeem_amount: redeemAmt,
+            amount: redeemAmt,
         };
-        if (payload.invoice_id) body.invoice_id = Number(payload.invoice_id);
-        if (payload.order_id) body.order_id = Number(payload.order_id);
+        if (payload.invoice_id) body.invoice_id = Number(payload.invoice_id) || payload.invoice_id;
+        if (payload.order_id) body.order_id = Number(payload.order_id) || payload.order_id;
         if (payload.notes) body.notes = String(payload.notes).trim();
 
         const response = await apiClient.post('/credit-notes/redeem', body);

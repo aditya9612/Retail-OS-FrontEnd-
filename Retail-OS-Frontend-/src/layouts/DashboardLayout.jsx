@@ -1,16 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
+import Sidebar, { NO_COLLAPSE_ROUTES } from '../components/Sidebar';
 import Header from '../components/Header';
-
-const NO_COLLAPSE_ROUTES = [
-    '/dashboard',
-    '/products',
-    '/products/barcode',
-    '/categories',
-    '/stores',
-    '/inventory/store-transfers'
-];
 
 const DashboardLayout = () => {
     const location = useLocation();
@@ -28,7 +19,20 @@ const DashboardLayout = () => {
             <Sidebar collapsed={effectiveCollapsed} onToggle={() => !isNoCollapseModule && setSidebarCollapsed(prev => !prev)} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
                 <Header sidebarCollapsed={effectiveCollapsed} onToggleSidebar={() => !isNoCollapseModule && setSidebarCollapsed(prev => !prev)} />
-                <main style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
+                <main
+                    style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                        width: '100%',
+                        maxWidth: '100%',
+                        minWidth: 0,
+                        overflowY: currentPath === '/billing' ? 'hidden' : 'scroll',
+                        overflowX: currentPath === '/billing' ? 'hidden' : 'auto',
+                    }}
+                    className="custom-scrollbar"
+                >
                     <Outlet />
                 </main>
             </div>

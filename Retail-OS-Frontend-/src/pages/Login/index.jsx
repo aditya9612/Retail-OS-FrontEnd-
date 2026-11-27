@@ -800,8 +800,7 @@ const Login = () => {
                 }
 
                 .login-page-container {
-                    height: 100vh;
-                    max-height: 100vh;
+                    min-height: 100vh;
                     width: 100%;
                     background: linear-gradient(135deg, #F0F4FE 0%, #E6EEFA 55%, #F4F7FF 100%);
                     display: flex;
@@ -810,7 +809,9 @@ const Login = () => {
                     padding: clamp(10px, 1.6vh, 22px) clamp(16px, 2vw, 36px);
                     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     position: relative;
-                    overflow: hidden;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    box-sizing: border-box;
                 }
 
 

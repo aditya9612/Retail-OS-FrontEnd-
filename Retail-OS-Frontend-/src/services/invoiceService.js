@@ -87,8 +87,6 @@ export const createInvoice = async (payload) => {
             same_state: payload.same_state !== undefined ? Boolean(payload.same_state) : true,
             ...(sanitizedItems && sanitizedItems.length > 0 ? { items: sanitizedItems } : {}),
             ...(sanitizedPayments && sanitizedPayments.length > 0 ? { payments: sanitizedPayments } : {}),
-            ...(payload.shift_id ? { shift_id: Number(payload.shift_id) } : {}),
-            ...(payload.idempotency_key ? { idempotency_key: String(payload.idempotency_key) } : {}),
         };
 
         const response = await apiClient.post('/invoices', sanitizedPayload);
@@ -376,6 +374,25 @@ export const voidInvoice = async (invoiceId, reason = 'Customer cancelled at cou
 };
 
 /**
+ * 11. POST /api/v1/invoices/{invoice_id}/whatsapp — Send Invoice via WhatsApp
+ * @param {number|string} invoiceId
+ * @param {string|null} [phone]
+ */
+export const sendInvoiceWhatsApp = async (invoiceId, phone = null) => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required for WhatsApp dispatch.');
+        const response = await apiClient.post(`/invoices/${encodeURIComponent(invoiceId)}/whatsapp`, {
+            phone: phone ? String(phone).trim() : null,
+        });
+        return response.data;
+    } catch (e) {
+        await handleApiError(e);
+    }
+};
+
+export const sendInvoiceWhatsapp = sendInvoiceWhatsApp;
+
+/**
  * Metadata Helpers for Form Selectors (Stores, Customers, Products)
  */
 export const getStores = async () => {
@@ -422,6 +439,8 @@ export default {
     getInvoiceByNumber,
     getInvoicePdfStatus,
     voidInvoice,
+    sendInvoiceWhatsApp,
+    sendInvoiceWhatsapp,
     getStores,
     getCustomers,
     getProducts,

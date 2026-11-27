@@ -21,6 +21,8 @@ import {
     BsArrowUpRight,
     BsArrowDownLeft,
     BsCheck2Circle,
+    BsChevronLeft,
+    BsChevronRight,
 } from 'react-icons/bs';
 
 import {
@@ -92,13 +94,17 @@ const GSTManagement = () => {
     const [errorMsg, setErrorMsg] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
 
-    // Tab 1: Rates Filters
+    // Tab 1: Rates Filters & Pagination
     const [searchHsn, setSearchHsn] = useState('');
     const [selectedSlab, setSelectedSlab] = useState('all');
+    const [pageRates, setPageRates] = useState(1);
+    const [pageSizeRates, setPageSizeRates] = useState(10);
 
-    // Tab 2: GSTR-1 Filters
+    // Tab 2: GSTR-1 Filters & Pagination
     const [gstr1Search, setGstr1Search] = useState('');
     const [gstr1TypeFilter, setGstr1TypeFilter] = useState('all'); // 'all' | 'b2b' | 'b2c'
+    const [pageGstr1, setPageGstr1] = useState(1);
+    const [pageSizeGstr1, setPageSizeGstr1] = useState(10);
 
     // Simple Modal for Add / Edit Rate (Only required fields!)
     const [showRateModal, setShowRateModal] = useState(false);
@@ -304,6 +310,9 @@ const GSTManagement = () => {
         });
     }, [rates, searchHsn, selectedSlab]);
 
+    const totalPagesRates = Math.max(1, Math.ceil(filteredRates.length / pageSizeRates));
+    const paginatedRates = filteredRates.slice((pageRates - 1) * pageSizeRates, pageRates * pageSizeRates);
+
     // ── TAB 2: GSTR-1 Invoices & Calculations ──
     const processedInvoices = useMemo(() => {
         return invoices.map(inv => {
@@ -350,6 +359,9 @@ const GSTManagement = () => {
             return matchQ && matchType;
         });
     }, [processedInvoices, gstr1Search, gstr1TypeFilter]);
+
+    const totalPagesGstr1 = Math.max(1, Math.ceil(filteredGstr1.length / pageSizeGstr1));
+    const paginatedGstr1 = filteredGstr1.slice((pageGstr1 - 1) * pageSizeGstr1, pageGstr1 * pageSizeGstr1);
 
     // GSTR-1 Metrics
     const gstr1Stats = useMemo(() => {
@@ -418,7 +430,7 @@ const GSTManagement = () => {
     };
 
     return (
-        <div style={{ padding: '24px 28px', maxWidth: '1360px', margin: '0 auto', fontFamily: 'inherit' }}>
+        <div className="dash-page dash-page--full">
             {/* ── Top Header ── */}
             <div style={{
                 display: 'flex',
@@ -426,8 +438,8 @@ const GSTManagement = () => {
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: 16,
-                marginBottom: 20,
-                paddingBottom: 18,
+                marginBottom: 0,
+                paddingBottom: 14,
                 borderBottom: '1px solid #e5e7eb'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -472,25 +484,6 @@ const GSTManagement = () => {
 
                 {/* Header Action Buttons */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <button
-                        onClick={loadAll}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '9px 14px',
-                            background: '#fff',
-                            border: '1px solid #d1d5db',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: '#374151',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <BsArrowClockwise className={loading ? 'spin-anim' : ''} size={14} /> Refresh
-                    </button>
-
                     {activeTab === 'rates' && (
                         <>
                             <button
@@ -560,7 +553,7 @@ const GSTManagement = () => {
             {/* ── Alerts & Feedback ── */}
             {errorMsg && (
                 <div style={{
-                    marginBottom: 16,
+                    marginBottom: 0,
                     padding: '12px 16px',
                     borderRadius: 8,
                     background: '#fef2f2',
@@ -580,7 +573,7 @@ const GSTManagement = () => {
 
             {successMsg && (
                 <div style={{
-                    marginBottom: 16,
+                    marginBottom: 0,
                     padding: '12px 16px',
                     borderRadius: 8,
                     background: '#ecfdf5',
@@ -603,7 +596,7 @@ const GSTManagement = () => {
                 display: 'flex',
                 gap: 8,
                 borderBottom: '1px solid #e5e7eb',
-                marginBottom: 20
+                marginBottom: 0
             }}>
                 <button
                     onClick={() => setActiveTab('rates')}
@@ -701,8 +694,8 @@ const GSTManagement = () => {
                     </div>
 
                     {/* Rates Table Container */}
-                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-                        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ padding: '10px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
                                 <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
                                     <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
@@ -710,13 +703,13 @@ const GSTManagement = () => {
                                         type="text"
                                         placeholder="Search by HSN code (e.g. 6109) or description..."
                                         value={searchHsn}
-                                        onChange={e => setSearchHsn(e.target.value)}
+                                        onChange={e => { setSearchHsn(e.target.value); setPageRates(1); }}
                                         style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                                     />
                                 </div>
                                 <select
                                     value={selectedSlab}
-                                    onChange={e => setSelectedSlab(e.target.value)}
+                                    onChange={e => { setSelectedSlab(e.target.value); setPageRates(1); }}
                                     style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, background: '#fff', outline: 'none' }}
                                 >
                                     <option value="all">All Slabs</option>
@@ -734,49 +727,60 @@ const GSTManagement = () => {
 
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                                <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                    <tr>
-                                        <th style={{ padding: '12px 18px' }}>HSN / SAC Code</th>
-                                        <th style={{ padding: '12px 18px' }}>GST Rate</th>
-                                        <th style={{ padding: '12px 18px' }}>CGST (Intra-state)</th>
-                                        <th style={{ padding: '12px 18px' }}>SGST (Intra-state)</th>
-                                        <th style={{ padding: '12px 18px' }}>IGST (Inter-state)</th>
-                                        <th style={{ padding: '12px 18px' }}>Description</th>
-                                        <th style={{ padding: '12px 18px' }}>Status</th>
-                                        <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
+                                <thead>
+                                    <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <th style={{ padding: '9px 8px', width: 55, textAlign: 'center' }}>Sr. No.</th>
+                                        <th style={{ padding: '9px 14px' }}>HSN / SAC Code</th>
+                                        <th style={{ padding: '9px 14px' }}>GST Rate</th>
+                                        <th style={{ padding: '9px 14px' }}>CGST (Intra-state)</th>
+                                        <th style={{ padding: '9px 14px' }}>SGST (Intra-state)</th>
+                                        <th style={{ padding: '9px 14px' }}>IGST (Inter-state)</th>
+                                        <th style={{ padding: '9px 14px' }}>Description</th>
+                                        <th style={{ padding: '9px 14px' }}>Status</th>
+                                        <th style={{ padding: '9px 14px', textAlign: 'center' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredRates.length === 0 ? (
+                                    {paginatedRates.length === 0 ? (
                                         <tr>
-                                            <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+                                            <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
                                                 No GST rates found. Click <strong>"Add GST Rate"</strong> or <strong>"Seed Standard Slabs"</strong>.
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredRates.map(r => {
+                                        paginatedRates.map((r, idx) => {
                                             const rateNum = Number(r.gst_rate) || 0;
                                             const cgst = (rateNum / 2).toFixed(1);
                                             const sgst = (rateNum / 2).toFixed(1);
                                             const slab = STANDARD_SLABS.find(s => s.rate === rateNum) || { color: '#4f46e5', bg: '#eef2ff' };
+                                            const serialNumber = (pageRates - 1) * pageSizeRates + idx + 1;
 
                                             return (
-                                                <tr key={r.id || r.hsn_code} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                    <td style={{ padding: '12px 18px', fontWeight: 800, color: '#111827', fontFamily: 'monospace', fontSize: 14 }}>
+                                                <tr
+                                                    key={r.id || r.hsn_code}
+                                                    className="table-row-hover"
+                                                    style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                >
+                                                    <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                                        {serialNumber}
+                                                    </td>
+                                                    <td style={{ padding: '9px 14px', fontWeight: 800, color: '#111827', fontFamily: 'monospace', fontSize: 14 }}>
                                                         {r.hsn_code}
                                                     </td>
-                                                    <td style={{ padding: '12px 18px' }}>
+                                                    <td style={{ padding: '9px 14px' }}>
                                                         <span style={{ padding: '3px 9px', borderRadius: 6, fontWeight: 800, fontSize: 12, background: slab.bg, color: slab.color }}>
                                                             {rateNum}%
                                                         </span>
                                                     </td>
-                                                    <td style={{ padding: '12px 18px', color: '#4b5563', fontWeight: 600 }}>{cgst}%</td>
-                                                    <td style={{ padding: '12px 18px', color: '#4b5563', fontWeight: 600 }}>{sgst}%</td>
-                                                    <td style={{ padding: '12px 18px', color: '#4b5563', fontWeight: 600 }}>{rateNum}%</td>
-                                                    <td style={{ padding: '12px 18px', color: '#374151', maxWidth: 280 }}>
+                                                    <td style={{ padding: '9px 14px', color: '#4b5563', fontWeight: 600 }}>{cgst}%</td>
+                                                    <td style={{ padding: '9px 14px', color: '#4b5563', fontWeight: 600 }}>{sgst}%</td>
+                                                    <td style={{ padding: '9px 14px', color: '#4b5563', fontWeight: 600 }}>{rateNum}%</td>
+                                                    <td style={{ padding: '9px 14px', color: '#374151', maxWidth: 280 }}>
                                                         {r.description || <span style={{ color: '#9ca3af' }}>—</span>}
                                                     </td>
-                                                    <td style={{ padding: '12px 18px' }}>
+                                                    <td style={{ padding: '9px 14px' }}>
                                                         <span style={{
                                                             padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
                                                             background: r.is_active !== false ? '#ecfdf5' : '#f3f4f6',
@@ -787,21 +791,51 @@ const GSTManagement = () => {
                                                             {r.is_active !== false ? 'Active' : 'Inactive'}
                                                         </span>
                                                     </td>
-                                                    <td style={{ padding: '12px 18px', textAlign: 'right' }}>
-                                                        <div style={{ display: 'inline-flex', gap: 6 }}>
+                                                    <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleOpenEdit(r)}
                                                                 title="Edit Rate"
-                                                                style={{ padding: '5px 9px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600 }}
+                                                                style={{
+                                                                    width: 28,
+                                                                    height: 28,
+                                                                    borderRadius: 6,
+                                                                    border: '1px solid #e5e7eb',
+                                                                    background: '#ffffff',
+                                                                    color: '#374151',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                                onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                             >
-                                                                <BsPencilFill size={11} /> Edit
+                                                                <BsPencilFill size={11} />
                                                             </button>
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleDeleteRate(r.id, r.hsn_code)}
                                                                 title="Delete Rate"
-                                                                style={{ padding: '5px 9px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600 }}
+                                                                style={{
+                                                                    width: 28,
+                                                                    height: 28,
+                                                                    borderRadius: 6,
+                                                                    border: '1px solid #e5e7eb',
+                                                                    background: '#ffffff',
+                                                                    color: '#dc2626',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                                onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+                                                                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                             >
-                                                                <BsTrash size={11} />
+                                                                <BsTrash size={12} />
                                                             </button>
                                                         </div>
                                                     </td>
@@ -811,6 +845,91 @@ const GSTManagement = () => {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Pagination Controls for Rates */}
+                        <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 10 }}>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                Showing <strong>{filteredRates.length > 0 ? (pageRates - 1) * pageSizeRates + 1 : 0}</strong> to <strong>{Math.min(pageRates * pageSizeRates, filteredRates.length)}</strong> of <strong>{filteredRates.length}</strong> rates
+                            </p>
+
+                            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                                {/* Entries per Page Dropdown */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                                    <select
+                                        className="ec-input"
+                                        value={pageSizeRates}
+                                        onChange={e => {
+                                            setPageSizeRates(Number(e.target.value));
+                                            setPageRates(1);
+                                        }}
+                                        style={{
+                                            height: 32,
+                                            fontSize: 12,
+                                            padding: '0 8px',
+                                            borderRadius: 6,
+                                            background: '#ffffff',
+                                            border: '1px solid #d1d5db',
+                                            cursor: 'pointer',
+                                            fontWeight: 600,
+                                            color: '#374151',
+                                        }}
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                    </select>
+                                </div>
+
+                                {/* Navigation Controls: Arrows only */}
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageRates === 1}
+                                        onClick={() => setPageRates(prev => Math.max(1, prev - 1))}
+                                        title="Previous Page"
+                                        aria-label="Previous Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronLeft size={14} />
+                                    </button>
+
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                        Page {pageRates} of {totalPagesRates || 1}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageRates >= totalPagesRates}
+                                        onClick={() => setPageRates(prev => Math.min(totalPagesRates, prev + 1))}
+                                        title="Next Page"
+                                        aria-label="Next Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -822,35 +941,55 @@ const GSTManagement = () => {
             {activeTab === 'gstr1' && (
                 <div>
                     {/* GSTR-1 Metric Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 20 }}>
-                        <div style={{ background: '#fff', borderRadius: 12, padding: '16px 20px', border: '1px solid #e5e7eb' }}>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Total Taxable Supplies</p>
-                            <p style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: '6px 0 0 0' }}>{fmt(gstr1Stats.taxable)}</p>
-                            <p style={{ fontSize: 12, color: '#6366f1', fontWeight: 600, margin: '4px 0 0 0' }}>From {processedInvoices.length} sales invoices</p>
+                    <div className="adm-kpi-grid">
+                        <div className="adm-kpi-card">
+                            <div className="adm-kpi-top">
+                                <div className="adm-kpi-icon" style={{ background: '#eef2ff', color: '#4f46e5' }}>
+                                    <BsFileEarmarkText size={18} />
+                                </div>
+                            </div>
+                            <p className="adm-kpi-label">Total Taxable Supplies</p>
+                            <p className="adm-kpi-value">{fmt(gstr1Stats.taxable)}</p>
+                            <p className="adm-kpi-sub">From {processedInvoices.length} sales invoices</p>
                         </div>
 
-                        <div style={{ background: '#fff', borderRadius: 12, padding: '16px 20px', border: '1px solid #e5e7eb' }}>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Total Output GST</p>
-                            <p style={{ fontSize: 22, fontWeight: 800, color: '#10b981', margin: '6px 0 0 0' }}>{fmt(gstr1Stats.totalTax)}</p>
-                            <p style={{ fontSize: 12, color: '#10b981', fontWeight: 600, margin: '4px 0 0 0' }}>Collected from counter buyers</p>
+                        <div className="adm-kpi-card">
+                            <div className="adm-kpi-top">
+                                <div className="adm-kpi-icon" style={{ background: '#ecfdf5', color: '#10b981' }}>
+                                    <BsPercent size={18} />
+                                </div>
+                            </div>
+                            <p className="adm-kpi-label">Total Output GST</p>
+                            <p className="adm-kpi-value" style={{ color: '#10b981' }}>{fmt(gstr1Stats.totalTax)}</p>
+                            <p className="adm-kpi-sub">Collected from counter buyers</p>
                         </div>
 
-                        <div style={{ background: '#fff', borderRadius: 12, padding: '16px 20px', border: '1px solid #e5e7eb' }}>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>CGST + SGST Split</p>
-                            <p style={{ fontSize: 20, fontWeight: 800, color: '#111827', margin: '6px 0 0 0' }}>{fmt(gstr1Stats.cgst)} + {fmt(gstr1Stats.sgst)}</p>
-                            <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0 0' }}>Intra-state sales collection</p>
+                        <div className="adm-kpi-card">
+                            <div className="adm-kpi-top">
+                                <div className="adm-kpi-icon" style={{ background: '#f0f9ff', color: '#0ea5e9' }}>
+                                    <BsCurrencyRupee size={18} />
+                                </div>
+                            </div>
+                            <p className="adm-kpi-label">CGST + SGST Split</p>
+                            <p className="adm-kpi-value">{fmt(gstr1Stats.cgst)} + {fmt(gstr1Stats.sgst)}</p>
+                            <p className="adm-kpi-sub">Intra-state sales collection</p>
                         </div>
 
-                        <div style={{ background: '#fff', borderRadius: 12, padding: '16px 20px', border: '1px solid #e5e7eb' }}>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>B2B vs B2C Invoices</p>
-                            <p style={{ fontSize: 20, fontWeight: 800, color: '#111827', margin: '6px 0 0 0' }}>{gstr1Stats.b2bCount} B2B / {gstr1Stats.b2cCount} B2C</p>
-                            <p style={{ fontSize: 12, color: '#6366f1', margin: '4px 0 0 0' }}>IGST: {fmt(gstr1Stats.igst)}</p>
+                        <div className="adm-kpi-card">
+                            <div className="adm-kpi-top">
+                                <div className="adm-kpi-icon" style={{ background: '#fffbeb', color: '#d97706' }}>
+                                    <BsCalculator size={18} />
+                                </div>
+                            </div>
+                            <p className="adm-kpi-label">B2B vs B2C Invoices</p>
+                            <p className="adm-kpi-value">{gstr1Stats.b2bCount} B2B / {gstr1Stats.b2cCount} B2C</p>
+                            <p className="adm-kpi-sub">IGST: {fmt(gstr1Stats.igst)}</p>
                         </div>
                     </div>
 
                     {/* Invoices List */}
-                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-                        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ padding: '10px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
                                 <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
                                     <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
@@ -858,13 +997,13 @@ const GSTManagement = () => {
                                         type="text"
                                         placeholder="Search invoice #, customer or GSTIN..."
                                         value={gstr1Search}
-                                        onChange={e => setGstr1Search(e.target.value)}
+                                        onChange={e => { setGstr1Search(e.target.value); setPageGstr1(1); }}
                                         style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                                     />
                                 </div>
                                 <select
                                     value={gstr1TypeFilter}
-                                    onChange={e => setGstr1TypeFilter(e.target.value)}
+                                    onChange={e => { setGstr1TypeFilter(e.target.value); setPageGstr1(1); }}
                                     style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, background: '#fff', outline: 'none' }}
                                 >
                                     <option value="all">All Invoices</option>
@@ -879,51 +1018,157 @@ const GSTManagement = () => {
 
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                                <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                    <tr>
-                                        <th style={{ padding: '12px 18px' }}>Invoice ID</th>
-                                        <th style={{ padding: '12px 18px' }}>Customer Name</th>
-                                        <th style={{ padding: '12px 18px' }}>GSTIN / Type</th>
-                                        <th style={{ padding: '12px 18px' }}>Taxable Value</th>
-                                        <th style={{ padding: '12px 18px' }}>GST Rate</th>
-                                        <th style={{ padding: '12px 18px' }}>CGST</th>
-                                        <th style={{ padding: '12px 18px' }}>SGST</th>
-                                        <th style={{ padding: '12px 18px' }}>IGST</th>
-                                        <th style={{ padding: '12px 18px', textAlign: 'right' }}>Total (₹)</th>
+                                <thead>
+                                    <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <th style={{ padding: '9px 8px', width: 55, textAlign: 'center' }}>Sr. No.</th>
+                                        <th style={{ padding: '9px 14px' }}>Invoice ID</th>
+                                        <th style={{ padding: '9px 14px' }}>Customer Name</th>
+                                        <th style={{ padding: '9px 14px' }}>GSTIN / Type</th>
+                                        <th style={{ padding: '9px 14px' }}>Taxable Value</th>
+                                        <th style={{ padding: '9px 14px' }}>GST Rate</th>
+                                        <th style={{ padding: '9px 14px' }}>CGST</th>
+                                        <th style={{ padding: '9px 14px' }}>SGST</th>
+                                        <th style={{ padding: '9px 14px' }}>IGST</th>
+                                        <th style={{ padding: '9px 14px', textAlign: 'right' }}>Total (₹)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredGstr1.map(inv => (
-                                        <tr key={inv.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                            <td style={{ padding: '12px 18px', fontWeight: 700, color: '#6366f1' }}>{inv.id}</td>
-                                            <td style={{ padding: '12px 18px', fontWeight: 600, color: '#111827' }}>{inv.customer}</td>
-                                            <td style={{ padding: '12px 18px' }}>
-                                                {inv.isB2B ? (
-                                                    <span style={{ padding: '3px 8px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: 11, fontFamily: 'monospace' }}>
-                                                        {inv.gstin}
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#6b7280', fontWeight: 600, fontSize: 11 }}>
-                                                        B2C Consumer
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td style={{ padding: '12px 18px', fontWeight: 600 }}>{fmt(inv.taxable)}</td>
-                                            <td style={{ padding: '12px 18px' }}>
-                                                <span style={{ padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', fontWeight: 700, fontSize: 12 }}>
-                                                    {inv.rate}%
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '12px 18px', color: '#4b5563' }}>{fmt(inv.cgst)}</td>
-                                            <td style={{ padding: '12px 18px', color: '#4b5563' }}>{fmt(inv.sgst)}</td>
-                                            <td style={{ padding: '12px 18px', color: '#4b5563' }}>{fmt(inv.igst)}</td>
-                                            <td style={{ padding: '12px 18px', textAlign: 'right', fontWeight: 800, color: '#111827' }}>
-                                                {fmt(inv.grandTotal)}
+                                    {paginatedGstr1.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+                                                No invoice records found matching your filter.
                                             </td>
                                         </tr>
-                                    ))}
+                                    ) : (
+                                        paginatedGstr1.map((inv, idx) => {
+                                            const serialNumber = (pageGstr1 - 1) * pageSizeGstr1 + idx + 1;
+                                            return (
+                                                <tr
+                                                    key={inv.id}
+                                                    className="table-row-hover"
+                                                    style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                >
+                                                    <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                                        {serialNumber}
+                                                    </td>
+                                                    <td style={{ padding: '9px 14px', fontWeight: 700, color: '#6366f1' }}>{inv.id}</td>
+                                                    <td style={{ padding: '9px 14px', fontWeight: 600, color: '#111827' }}>{inv.customer}</td>
+                                                    <td style={{ padding: '9px 14px' }}>
+                                                        {inv.isB2B ? (
+                                                            <span style={{ padding: '3px 8px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: 11, fontFamily: 'monospace' }}>
+                                                                {inv.gstin}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#6b7280', fontWeight: 600, fontSize: 11 }}>
+                                                                B2C Consumer
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '9px 14px', fontWeight: 600 }}>{fmt(inv.taxable)}</td>
+                                                    <td style={{ padding: '9px 14px' }}>
+                                                        <span style={{ padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', fontWeight: 700, fontSize: 12 }}>
+                                                            {inv.rate}%
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '9px 14px', color: '#4b5563' }}>{fmt(inv.cgst)}</td>
+                                                    <td style={{ padding: '9px 14px', color: '#4b5563' }}>{fmt(inv.sgst)}</td>
+                                                    <td style={{ padding: '9px 14px', color: '#4b5563' }}>{fmt(inv.igst)}</td>
+                                                    <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 800, color: '#111827' }}>
+                                                        {fmt(inv.grandTotal)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Pagination Controls for GSTR-1 */}
+                        <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 10 }}>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                Showing <strong>{filteredGstr1.length > 0 ? (pageGstr1 - 1) * pageSizeGstr1 + 1 : 0}</strong> to <strong>{Math.min(pageGstr1 * pageSizeGstr1, filteredGstr1.length)}</strong> of <strong>{filteredGstr1.length}</strong> records
+                            </p>
+
+                            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                                {/* Entries per Page Dropdown */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                                    <select
+                                        className="ec-input"
+                                        value={pageSizeGstr1}
+                                        onChange={e => {
+                                            setPageSizeGstr1(Number(e.target.value));
+                                            setPageGstr1(1);
+                                        }}
+                                        style={{
+                                            height: 32,
+                                            fontSize: 12,
+                                            padding: '0 8px',
+                                            borderRadius: 6,
+                                            background: '#ffffff',
+                                            border: '1px solid #d1d5db',
+                                            cursor: 'pointer',
+                                            fontWeight: 600,
+                                            color: '#374151',
+                                        }}
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                    </select>
+                                </div>
+
+                                {/* Navigation Controls: Arrows only */}
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageGstr1 === 1}
+                                        onClick={() => setPageGstr1(prev => Math.max(1, prev - 1))}
+                                        title="Previous Page"
+                                        aria-label="Previous Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronLeft size={14} />
+                                    </button>
+
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                        Page {pageGstr1} of {totalPagesGstr1 || 1}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageGstr1 >= totalPagesGstr1}
+                                        onClick={() => setPageGstr1(prev => Math.min(totalPagesGstr1, prev + 1))}
+                                        title="Next Page"
+                                        aria-label="Next Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -935,98 +1180,132 @@ const GSTManagement = () => {
             {activeTab === 'gstr3b' && (
                 <div>
                     {/* Summary Comparison Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 20 }}>
-                        <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #e5e7eb' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>1. Output Tax Collected</span>
-                                <span style={{ color: '#ef4444', background: '#fef2f2', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Liability</span>
+                    <div className="adm-kpi-grid">
+                        <div className="adm-kpi-card">
+                            <div className="adm-kpi-top">
+                                <div className="adm-kpi-icon" style={{ background: '#fef2f2', color: '#ef4444' }}>
+                                    <BsArrowUpRight size={18} />
+                                </div>
+                                <span className="adm-kpi-badge adm-kpi-badge--down">Liability</span>
                             </div>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: 0 }}>{fmt(gstr3bStats.outputTotal)}</p>
-                            <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0 0' }}>Tax on sales: {fmt(gstr3bStats.outputTaxable)}</p>
+                            <p className="adm-kpi-label">1. Output Tax Collected</p>
+                            <p className="adm-kpi-value">{fmt(gstr3bStats.outputTotal)}</p>
+                            <p className="adm-kpi-sub">Tax on sales: {fmt(gstr3bStats.outputTaxable)}</p>
                         </div>
 
-                        <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #e5e7eb' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>2. Eligible Input Credit (ITC)</span>
-                                <span style={{ color: '#10b981', background: '#ecfdf5', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Deduction</span>
+                        <div className="adm-kpi-card">
+                            <div className="adm-kpi-top">
+                                <div className="adm-kpi-icon" style={{ background: '#ecfdf5', color: '#10b981' }}>
+                                    <BsArrowDownLeft size={18} />
+                                </div>
+                                <span className="adm-kpi-badge adm-kpi-badge--up">Deduction</span>
                             </div>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#10b981', margin: 0 }}>{fmt(gstr3bStats.itcTotal)}</p>
-                            <p style={{ fontSize: 12, color: '#10b981', fontWeight: 600, margin: '4px 0 0 0' }}>From {purchases.length} Purchase Orders</p>
+                            <p className="adm-kpi-label">2. Eligible Input Credit (ITC)</p>
+                            <p className="adm-kpi-value" style={{ color: '#10b981' }}>{fmt(gstr3bStats.itcTotal)}</p>
+                            <p className="adm-kpi-sub">From {purchases.length} Purchase Orders</p>
                         </div>
 
-                        <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #6366f1', boxShadow: '0 2px 10px rgba(99,102,241,0.08)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase' }}>3. Net GST Payable to Govt</span>
-                                <span style={{ color: '#fff', background: '#6366f1', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Net Due</span>
+                        <div className="adm-kpi-card" style={{ borderColor: '#6366f1' }}>
+                            <div className="adm-kpi-top">
+                                <div className="adm-kpi-icon" style={{ background: '#eef2ff', color: '#4f46e5' }}>
+                                    <BsCurrencyRupee size={18} />
+                                </div>
+                                <span className="adm-kpi-badge" style={{ background: '#6366f1', color: '#fff' }}>Net Due</span>
                             </div>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#4f46e5', margin: 0 }}>{fmt(gstr3bStats.netPayable)}</p>
-                            <p style={{ fontSize: 12, color: '#6366f1', fontWeight: 600, margin: '4px 0 0 0' }}>After ITC credit deduction</p>
+                            <p className="adm-kpi-label">3. Net GST Payable to Govt</p>
+                            <p className="adm-kpi-value" style={{ color: '#4f46e5' }}>{fmt(gstr3bStats.netPayable)}</p>
+                            <p className="adm-kpi-sub">After ITC credit deduction</p>
                         </div>
                     </div>
 
                     {/* Detailed 3B Reconciliation Table */}
-                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-                        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6' }}>
-                            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#111827' }}>
+                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ padding: '10px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#111827' }}>
                                 Monthly GSTR-3B Tax Return Summary
                             </h3>
-                            <p style={{ fontSize: 12.5, color: '#6b7280', margin: '3px 0 0 0' }}>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0 0' }}>
                                 Automatic statutory computation of output tax liability vs purchase ITC credit
                             </p>
                         </div>
 
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                            <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                <tr>
-                                    <th style={{ padding: '12px 18px' }}>Tax Category / Section</th>
-                                    <th style={{ padding: '12px 18px' }}>Taxable Value</th>
-                                    <th style={{ padding: '12px 18px' }}>CGST</th>
-                                    <th style={{ padding: '12px 18px' }}>SGST</th>
-                                    <th style={{ padding: '12px 18px' }}>IGST</th>
-                                    <th style={{ padding: '12px 18px', textAlign: 'right' }}>Total Tax Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                    <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
-                                        3.1 Outward Taxable Supplies (Sales)
-                                    </td>
-                                    <td style={{ padding: '14px 18px', fontWeight: 600 }}>{fmt(gstr3bStats.outputTaxable)}</td>
-                                    <td style={{ padding: '14px 18px', color: '#dc2626', fontWeight: 600 }}>{fmt(gstr3bStats.outputCgst)}</td>
-                                    <td style={{ padding: '14px 18px', color: '#dc2626', fontWeight: 600 }}>{fmt(gstr3bStats.outputSgst)}</td>
-                                    <td style={{ padding: '14px 18px', color: '#dc2626', fontWeight: 600 }}>{fmt(gstr3bStats.outputIgst)}</td>
-                                    <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 800, color: '#dc2626' }}>
-                                        {fmt(gstr3bStats.outputTotal)}
-                                    </td>
-                                </tr>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                                <thead>
+                                    <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <th style={{ padding: '9px 8px', width: 55, textAlign: 'center' }}>Sr. No.</th>
+                                        <th style={{ padding: '9px 14px' }}>Tax Category / Section</th>
+                                        <th style={{ padding: '9px 14px' }}>Taxable Value</th>
+                                        <th style={{ padding: '9px 14px' }}>CGST</th>
+                                        <th style={{ padding: '9px 14px' }}>SGST</th>
+                                        <th style={{ padding: '9px 14px' }}>IGST</th>
+                                        <th style={{ padding: '9px 14px', textAlign: 'right' }}>Total Tax Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        className="table-row-hover"
+                                        style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                                        onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                            1
+                                        </td>
+                                        <td style={{ padding: '9px 14px', fontWeight: 700, color: '#111827' }}>
+                                            3.1 Outward Taxable Supplies (Sales)
+                                        </td>
+                                        <td style={{ padding: '9px 14px', fontWeight: 600 }}>{fmt(gstr3bStats.outputTaxable)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#dc2626', fontWeight: 600 }}>{fmt(gstr3bStats.outputCgst)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#dc2626', fontWeight: 600 }}>{fmt(gstr3bStats.outputSgst)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#dc2626', fontWeight: 600 }}>{fmt(gstr3bStats.outputIgst)}</td>
+                                        <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 800, color: '#dc2626' }}>
+                                            {fmt(gstr3bStats.outputTotal)}
+                                        </td>
+                                    </tr>
 
-                                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                    <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
-                                        4. Eligible Input Tax Credit (ITC on Purchases)
-                                    </td>
-                                    <td style={{ padding: '14px 18px', fontWeight: 600 }}>{fmt(gstr3bStats.itcTaxable)}</td>
-                                    <td style={{ padding: '14px 18px', color: '#059669', fontWeight: 600 }}>-{fmt(gstr3bStats.itcCgst)}</td>
-                                    <td style={{ padding: '14px 18px', color: '#059669', fontWeight: 600 }}>-{fmt(gstr3bStats.itcSgst)}</td>
-                                    <td style={{ padding: '14px 18px', color: '#059669', fontWeight: 600 }}>-{fmt(gstr3bStats.itcIgst)}</td>
-                                    <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>
-                                        -{fmt(gstr3bStats.itcTotal)}
-                                    </td>
-                                </tr>
+                                    <tr
+                                        className="table-row-hover"
+                                        style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                                        onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                            2
+                                        </td>
+                                        <td style={{ padding: '9px 14px', fontWeight: 700, color: '#111827' }}>
+                                            4. Eligible Input Tax Credit (ITC on Purchases)
+                                        </td>
+                                        <td style={{ padding: '9px 14px', fontWeight: 600 }}>{fmt(gstr3bStats.itcTaxable)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#059669', fontWeight: 600 }}>-{fmt(gstr3bStats.itcCgst)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#059669', fontWeight: 600 }}>-{fmt(gstr3bStats.itcSgst)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#059669', fontWeight: 600 }}>-{fmt(gstr3bStats.itcIgst)}</td>
+                                        <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>
+                                            -{fmt(gstr3bStats.itcTotal)}
+                                        </td>
+                                    </tr>
 
-                                <tr style={{ background: '#f8fafc', fontWeight: 800 }}>
-                                    <td style={{ padding: '16px 18px', color: '#4f46e5', fontSize: 14 }}>
-                                        5. Net Tax Payable in Cash / Challan
-                                    </td>
-                                    <td style={{ padding: '16px 18px', color: '#64748b' }}>—</td>
-                                    <td style={{ padding: '16px 18px', color: '#4f46e5' }}>{fmt(gstr3bStats.netCgst)}</td>
-                                    <td style={{ padding: '16px 18px', color: '#4f46e5' }}>{fmt(gstr3bStats.netSgst)}</td>
-                                    <td style={{ padding: '16px 18px', color: '#4f46e5' }}>{fmt(gstr3bStats.netIgst)}</td>
-                                    <td style={{ padding: '16px 18px', textAlign: 'right', color: '#4f46e5', fontSize: 15 }}>
-                                        {fmt(gstr3bStats.netPayable)}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                                    <tr
+                                        className="table-row-hover"
+                                        style={{ background: '#f8fafc', fontWeight: 800 }}
+                                    >
+                                        <td style={{ padding: '9px 8px', textAlign: 'center', color: '#4f46e5', fontWeight: 700, fontSize: 12, width: 55 }}>
+                                            3
+                                        </td>
+                                        <td style={{ padding: '9px 14px', color: '#4f46e5', fontSize: 13.5 }}>
+                                            5. Net Tax Payable in Cash / Challan
+                                        </td>
+                                        <td style={{ padding: '9px 14px', color: '#64748b' }}>—</td>
+                                        <td style={{ padding: '9px 14px', color: '#4f46e5' }}>{fmt(gstr3bStats.netCgst)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#4f46e5' }}>{fmt(gstr3bStats.netSgst)}</td>
+                                        <td style={{ padding: '9px 14px', color: '#4f46e5' }}>{fmt(gstr3bStats.netIgst)}</td>
+                                        <td style={{ padding: '9px 14px', textAlign: 'right', color: '#4f46e5', fontSize: 14 }}>
+                                            {fmt(gstr3bStats.netPayable)}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             )}
