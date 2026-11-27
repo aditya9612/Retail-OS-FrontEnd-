@@ -765,7 +765,7 @@ const Employees = () => {
                 <KpiCard
                     variant="revenue"
                     icon={<BsPeopleFill />}
-                    title="Total Employees"
+                    title="Total Staff"
                     value={kpiStats.total}
                     subtitle="All registered staff members"
                     active={statusFilter === 'all'}
@@ -773,12 +773,12 @@ const Employees = () => {
                         setStatusFilter('all');
                         setPage(1);
                     }}
-                    tooltip="Click to view all registered employees"
+                    tooltip="Click to view all registered staff"
                 />
                 <KpiCard
                     variant="profit"
                     icon={<BsCheckCircleFill />}
-                    title="Active Employees"
+                    title="Active Staff"
                     value={kpiStats.active}
                     subtitle="Operational staff members"
                     active={statusFilter === 'active'}
@@ -786,12 +786,12 @@ const Employees = () => {
                         setStatusFilter(prev => prev === 'active' ? 'all' : 'active');
                         setPage(1);
                     }}
-                    tooltip="Click to filter by active employees"
+                    tooltip="Click to filter by active staff"
                 />
                 <KpiCard
                     variant="cost"
                     icon={<BsXCircleFill />}
-                    title="Inactive Employees"
+                    title="Inactive Staff"
                     value={kpiStats.inactive}
                     subtitle="Deactivated user credentials"
                     active={statusFilter === 'inactive'}
@@ -799,7 +799,7 @@ const Employees = () => {
                         setStatusFilter(prev => prev === 'inactive' ? 'all' : 'inactive');
                         setPage(1);
                     }}
-                    tooltip="Click to filter by inactive employees"
+                    tooltip="Click to filter by inactive staff"
                 />
                 <KpiCard
                     variant="margin"
