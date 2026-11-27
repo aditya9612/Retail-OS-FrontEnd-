@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { BsDownload, BsChevronDown, BsFileEarmarkSpreadsheet, BsFileEarmarkText } from "react-icons/bs";
+import { BsDownload, BsChevronDown, BsFileEarmarkSpreadsheet, BsFileEarmarkText, BsTagFill } from "react-icons/bs";
 import { PageHeader } from "../Common/PageComponents";
 import "./CategoryHeader.css";
 
@@ -37,6 +37,7 @@ const CategoryHeader = ({
       className="category-header"
       title="Category Management"
       subtitle="Organize products into hierarchical categories and track catalog metrics"
+      icon={<BsTagFill />}
       actions={
         <div className="category-header-right" style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {/* Export Dropdown (CSV / Excel) */}

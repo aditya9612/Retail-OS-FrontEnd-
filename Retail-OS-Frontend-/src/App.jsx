@@ -8,6 +8,7 @@ import {
     Navigate,
 } from 'react-router-dom';
 
+import { NotificationProvider } from './context/NotificationContext';
 import DashboardLayout from './layouts/DashboardLayout';
 
 // Core Pages
@@ -69,7 +70,8 @@ function App() {
     return (
         <ErrorBoundary>
             <Router>
-                <Routes>
+                <NotificationProvider>
+                    <Routes>
 
                 {/* Login page */}
                 <Route
@@ -107,6 +109,7 @@ function App() {
                         <Route path="/orders/:id" element={<BillingManagement />} />
                         <Route path="/billing/returns" element={<ReturnsRefundsPage />} />
                         <Route path="/billing/credit-notes" element={<CreditNotesPage />} />
+                        <Route path="/credit-notes" element={<CreditNotesPage />} />
                         <Route path="/gst-management" element={<GSTManagement />} />
                         <Route path="/billing/payments" element={<BillingPaymentsPage />} />
 
@@ -202,16 +205,17 @@ function App() {
                     }
                 />
 
-            </Routes>
-            <ToastContainer
-                position="top-right"
-                autoClose={3000}
-                hideProgressBar={false}
-                newestOnTop
-                closeOnClick
-                pauseOnHover
-                theme="colored"
-            />
+                </Routes>
+                <ToastContainer
+                    position="top-right"
+                    autoClose={3000}
+                    hideProgressBar={false}
+                    newestOnTop
+                    closeOnClick
+                    pauseOnHover
+                    theme="colored"
+                />
+            </NotificationProvider>
         </Router>
         </ErrorBoundary>
     );

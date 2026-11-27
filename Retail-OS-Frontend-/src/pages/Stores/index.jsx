@@ -1430,7 +1430,7 @@ const Stores = () => {
                 <div>
                     {/* Header */}
                     <PageHeader
-                        title="Stores Directory"
+                        title="Store"
                         subtitle={
                             <span>
                                 Manage branch locations, warehouses, staff and store details (<code>/api/v1/stores</code>)

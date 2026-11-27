@@ -82,7 +82,7 @@ export const menuGroups = [
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },
             { name: 'GRN', icon: <BsClipboardCheck />, path: '/inventory/grn' },
             { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns', aliasPaths: ['/returns', '/purchase-order-returns'] },
-            { name: 'Store Transfers', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
+            { name: 'Store Transfer', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
         ],
     },
     {
@@ -119,7 +119,7 @@ export const menuGroups = [
         id: 'multi_store',
         label: 'MULTI-STORE',
         items: [
-            { name: 'Stores Directory', icon: <BsShop />, path: '/stores' },
+            { name: 'Store', icon: <BsShop />, path: '/stores' },
             { name: 'Store Targets', icon: <BsBullseye />, path: '/stores/targets' },
         ],
     },
@@ -150,13 +150,30 @@ export const menuGroups = [
     },
 ];
 
-const NO_COLLAPSE_ROUTES = [
+export const NO_COLLAPSE_ROUTES = [
     '/dashboard',
     '/products',
     '/products/barcode',
     '/categories',
     '/stores',
-    '/inventory/store-transfers'
+    '/inventory/store-transfers',
+    // Billing & GST Module
+    '/billing',
+    '/invoices',
+    '/billing-management',
+    '/orders',
+    '/gst-management',
+    '/credit-notes',
+    '/payments',
+    // Customer Module
+    '/customers',
+    '/customer-loyalty',
+    // Profile & Authentication Pages
+    '/profile',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
 ];
 
 const Sidebar = ({ collapsed, onToggle }) => {
@@ -482,42 +499,46 @@ const Sidebar = ({ collapsed, onToggle }) => {
                             Register Online
                         </span>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onToggle}
-                        style={{
-                            background: '#f1f5f9',
-                            border: 'none',
-                            color: '#64748b',
-                            borderRadius: 6,
-                            padding: '4px 6px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                        }}
-                        title="Collapse sidebar rail"
-                    >
-                        <BsLayoutSidebarInset size={14} />
-                    </button>
+                    {!isNoCollapseModule && (
+                        <button
+                            type="button"
+                            onClick={onToggle}
+                            style={{
+                                background: '#f1f5f9',
+                                border: 'none',
+                                color: '#64748b',
+                                borderRadius: 6,
+                                padding: '4px 6px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                            }}
+                            title="Collapse sidebar rail"
+                        >
+                            <BsLayoutSidebarInset size={14} />
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div style={{ padding: '12px 0', display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--color-border)', background: '#fafafa' }}>
-                    <button
-                        type="button"
-                        onClick={onToggle}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#64748b',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                        title="Expand sidebar"
-                    >
-                        <BsLayoutSidebarInset size={16} />
-                    </button>
+                    {!isNoCollapseModule && (
+                        <button
+                            type="button"
+                            onClick={onToggle}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#64748b',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                            title="Expand sidebar"
+                        >
+                            <BsLayoutSidebarInset size={16} />
+                        </button>
+                    )}
                 </div>
             )}
         </aside>

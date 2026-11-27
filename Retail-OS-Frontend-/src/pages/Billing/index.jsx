@@ -3,8 +3,17 @@ import {
     addCartItem,
     updateCartItem,
     removeCartItem,
+    clearCart,
     getCart,
     applyDiscount,
+    holdCart,
+    getHeldCarts,
+    recallHeldCart,
+    cancelHeldCart,
+    validateCartStock,
+    scanCartItem,
+    setCartCustomer,
+    removeCartCustomer,
     searchCustomers,
     quickCreateCustomer,
     getActiveStoreId,
@@ -12,7 +21,8 @@ import {
 import { createInvoice, downloadInvoicePdf } from '../../services/invoiceService';
 import { getEffectiveBranding, normalizeLogoUrl } from '../../services/documentSettingsService';
 import { exportReport, getTopSellingProducts } from '../../services/reportService';
-import { validateCreditNote } from '../../services/creditNoteService';
+import { validateCreditNote, redeemCreditNote } from '../../services/creditNoteService';
+import { getQrPayload } from '../../services/paymentService';
 import {
     getCustomerLoyalty,
     earnLoyalty,
@@ -42,6 +52,9 @@ import {
     BsX,
     BsPercent,
     BsTagFill,
+    BsPauseCircleFill,
+    BsPlayCircleFill,
+    BsClockHistory,
     BsCheckLg,
     BsTelephoneFill,
     BsCalculator,
@@ -180,7 +193,7 @@ const Billing = () => {
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [discountType, setDiscountType] = useState('percentage');
     const [billDiscount, setBillDiscount] = useState(0);
-    const [billGstRate, setBillGstRate] = useState(18);
+    const [billGstRate, setBillGstRate] = useState('auto');
     const [paymentMode, setPaymentMode] = useState('Cash');
     const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
     const [showPreview, setShowPreview] = useState(false);
@@ -190,6 +203,14 @@ const Billing = () => {
     const [apiError, setApiError] = useState('');
     // ── Cash tendered & change calculation ─────────────────────────────────
     const [cashTendered, setCashTendered] = useState('');
+    // ── UPI Dynamic QR state ───────────────────────────────────────────────
+    const [qrData, setQrData] = useState(null);
+    const [qrLoading, setQrLoading] = useState(false);
+    const [qrError, setQrError] = useState('');
+    const [showQrModal, setShowQrModal] = useState(false);
+    // ── Card Payment state (for manual EDC slip reconciliation) ─────────────
+    const [cardLast4, setCardLast4] = useState('');
+    const [cardRrn, setCardRrn] = useState('');
     // ── POS Numeric Keypad state ───────────────────────────────────────────
     const [showNumpad, setShowNumpad] = useState(false);
     const [numpadTarget, setNumpadTarget] = useState('barcode'); // 'barcode' | 'cash' | 'discount'
@@ -210,6 +231,76 @@ const Billing = () => {
         setStockWarning(`"${productName}" is currently Out of Stock.`);
         setTimeout(() => setStockWarning(''), 3000);
     }, []);
+
+    // ── Hold & Recall (Parked Bills) State ─────────────────────────────────
+    const [heldCarts, setHeldCarts] = useState([]);
+    const [heldLoading, setHeldLoading] = useState(false);
+    const [showHeldModal, setShowHeldModal] = useState(false);
+
+    // Load held carts on mount
+    const loadHeldCarts = useCallback(async () => {
+        setHeldLoading(true);
+        try {
+            const data = await getHeldCarts();
+            const list = Array.isArray(data) ? data : (data?.items || data?.data || []);
+            setHeldCarts(list);
+        } catch (_) {
+            setHeldCarts([]);
+        } finally {
+            setHeldLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadHeldCarts();
+    }, [loadHeldCarts]);
+
+    const handleHoldBill = async () => {
+        if (cart.length === 0) return;
+        setApiError('');
+        try {
+            await holdCart({
+                notes: `Parked at POS - Bill #${invoiceNo}`,
+                customer_name: customer.name.trim() || selectedCustomer?.name || 'Walk-in Customer',
+                customer_phone: customer.phone.trim() || selectedCustomer?.phone || null,
+                customer_id: selectedCustomer?.id || null,
+            });
+            await handleReset();
+            loadHeldCarts();
+        } catch (err) {
+            setApiError(err?.message || 'Failed to hold bill');
+        }
+    };
+
+    const handleRecallBill = async (holdId) => {
+        setApiError('');
+        try {
+            const recalled = await recallHeldCart(holdId);
+            if (recalled?.items && recalled.items.length > 0) {
+                syncCartWithServer(recalled.items);
+                if (recalled.customer_name || recalled.customer_phone) {
+                    setCustomer({
+                        name: recalled.customer_name || '',
+                        phone: recalled.customer_phone || '',
+                        gstin: '',
+                    });
+                }
+            }
+            setShowHeldModal(false);
+            loadHeldCarts();
+        } catch (err) {
+            setApiError(err?.message || 'Failed to recall held bill');
+        }
+    };
+
+    const handleCancelHeldBill = async (holdId) => {
+        try {
+            await cancelHeldCart(holdId);
+            loadHeldCarts();
+        } catch (err) {
+            console.warn('[Billing] Cancel held cart error:', err);
+        }
+    };
 
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
@@ -443,9 +534,25 @@ const Billing = () => {
         }
     };
 
-    const handleScanSubmit = (codeToScan) => {
+    const handleScanSubmit = async (codeToScan) => {
         const val = (codeToScan !== undefined ? codeToScan : scannerValue).trim().toLowerCase();
         if (!val) return;
+        setApiError('');
+
+        // 1. First attempt backend Swagger barcode scanning endpoint
+        try {
+            const serverRes = await scanCartItem({ barcode: val, quantity: 1 });
+            if (serverRes?.items && serverRes.items.length > 0) {
+                syncCartWithServer(serverRes.items);
+                setScannerValue('');
+                setManualBarcodeInput('');
+                const lastItem = serverRes.items[serverRes.items.length - 1];
+                setLastScanned({ barcode: val, name: lastItem?.product_name || val, success: true });
+                return;
+            }
+        } catch (_) { }
+
+        // 2. Fallback to local catalog resolution
         const product = products.find(p =>
             String(p.barcode).toLowerCase() === val ||
             String(p.id).toLowerCase() === val ||
@@ -457,7 +564,7 @@ const Billing = () => {
             setManualBarcodeInput('');
             setLastScanned({ barcode: product.barcode, name: product.name, success: true });
         } else {
-            setLastScanned({ barcode: val, error: 'Product with this barcode not found', success: false });
+            setLastScanned({ barcode: val, error: 'Product with this barcode not found in catalog', success: false });
         }
     };
 
@@ -542,6 +649,7 @@ const Billing = () => {
     const addToCart = useCallback(async (product) => {
         // Automatically open Current Order panel on the right
         setIsOrderPanelOpen(true);
+        setApiError(''); // Clear any previous error banner
 
         // ── Enforce per-item quantity limit ───────────────────────────────────
         const existingItem = cart.find(i => i.id === product.id);
@@ -598,6 +706,7 @@ const Billing = () => {
     }, [cart, syncCartWithServer, showQtyLimitWarning]);
 
     const removeFromCart = useCallback(async (id) => {
+        setApiError(''); // Clear error banner on cart modification
         // Optimistic local removal — instant UI feedback
         setCart(prev => prev.filter(i => i.id !== id));
 
@@ -622,6 +731,7 @@ const Billing = () => {
     }, [syncCartWithServer]);
 
     const updateQty = useCallback(async (id, delta) => {
+        setApiError(''); // Clear error banner on quantity change
         const item = cart.find(i => i.id === id);
         if (!item) return;
         const newQty = item.qty + delta;
@@ -691,11 +801,6 @@ const Billing = () => {
         }
         const finalTaxable = Math.max(0, discountedTaxable - loyaltyDiscountVal);
 
-        // GST is counted on all bill based on the statutory bill GST rate
-        const effectiveRate = billGstRate != null
-            ? billGstRate
-            : (cart.length > 0 ? (cart[0].gstRate || 18) : 18);
-
         // Inter-State vs Intra-State detection based on store & customer GSTIN
         const storeGstin = String(effectiveBranding?.gstin || '').trim().toUpperCase();
         const custGstin = String(customer.gstin || selectedCustomer?.gstin || '').trim().toUpperCase();
@@ -707,10 +812,44 @@ const Billing = () => {
             storeGstin.slice(0, 2) !== custGstin.slice(0, 2)
         );
 
-        const totalGST = Math.round(((finalTaxable * effectiveRate) / 100) * 100) / 100;
+        // Statutory GST calculation:
+        // Apportion bill-level discount proportionally across line items to obtain line taxable,
+        // then calculate item statutory GST per line (or apply billGstRate override if manually set).
+        const discountRatio = subtotal > 0 ? (finalTaxable / subtotal) : 1;
+        let totalGST = 0;
+        const lineTaxDetails = cart.map(item => {
+            const lineBase = (item.price - (item.discountPerItem || 0)) * item.qty;
+            const lineEffectiveTaxable = Math.round(lineBase * discountRatio * 100) / 100;
+            const itemStatutoryRate = Number(item.gstRate ?? (item.tax_rate ?? (item.gst_rate ?? 18)));
+            const appliedRate = (billGstRate !== null && billGstRate !== undefined && billGstRate !== 'auto')
+                ? Number(billGstRate)
+                : itemStatutoryRate;
+            const lineGst = Math.round(((lineEffectiveTaxable * appliedRate) / 100) * 100) / 100;
+            totalGST += lineGst;
+            return {
+                id: item.id,
+                name: item.name,
+                appliedRate,
+                taxable: lineEffectiveTaxable,
+                gst: lineGst,
+            };
+        });
+
+        totalGST = Math.round(totalGST * 100) / 100;
         const cgstAmount = isInterState ? 0 : Math.round((totalGST / 2) * 100) / 100;
         const sgstAmount = isInterState ? 0 : Math.round((totalGST - cgstAmount) * 100) / 100;
         const igstAmount = isInterState ? totalGST : 0;
+
+        const effectiveRate = finalTaxable > 0
+            ? Math.round(((totalGST / finalTaxable) * 100) * 10) / 10
+            : (billGstRate !== 'auto' && billGstRate != null ? Number(billGstRate) : 18);
+        const grossTotal = Math.round((finalTaxable + totalGST) * 100) / 100;
+
+        // Credit note tender (payment instrument - reduces amount payable without distorting GST)
+        const creditNoteAmount = creditNoteData
+            ? Math.min(Number(creditNoteData.applicable_amount || creditNoteData.amount || 0), grossTotal)
+            : 0;
+        const netPayable = Math.max(0, Math.round((grossTotal - creditNoteAmount) * 100) / 100);
 
         return {
             subtotal,
@@ -724,16 +863,51 @@ const Billing = () => {
             discountAmount,
             loyaltyDiscount: loyaltyDiscountVal,
             gstRate: effectiveRate,
-            grandTotal: Math.round((finalTaxable + totalGST) * 100) / 100
+            isItemWiseGst: billGstRate === null || billGstRate === 'auto' || billGstRate === undefined,
+            grandTotal: grossTotal,
+            creditNoteApplied: creditNoteAmount,
+            netPayable,
+            lineTaxDetails,
         };
-    }, [cart, billDiscount, discountType, billGstRate, effectiveBranding?.gstin, customer.gstin, selectedCustomer?.gstin, loyaltyRedeemApplied, loyaltyPointsRedeemed]);
+    }, [cart, billDiscount, discountType, billGstRate, effectiveBranding?.gstin, customer.gstin, selectedCustomer?.gstin, loyaltyRedeemApplied, loyaltyPointsRedeemed, creditNoteData]);
 
     // Change Due calculation when cash is tendered
     const changeDue = useMemo(() => {
         const tendered = parseFloat(cashTendered);
         if (isNaN(tendered) || tendered <= 0) return 0;
-        return Math.max(0, Math.round((tendered - totals.grandTotal) * 100) / 100);
-    }, [cashTendered, totals.grandTotal]);
+        const targetDue = totals.netPayable != null ? totals.netPayable : totals.grandTotal;
+        return Math.max(0, Math.round((tendered - targetDue) * 100) / 100);
+    }, [cashTendered, totals.netPayable, totals.grandTotal]);
+
+    // ── Dynamic UPI QR Code fetch handler ──────────────────────────────────
+    const activePayableAmount = totals.netPayable != null ? totals.netPayable : totals.grandTotal;
+
+    const fetchUpiQr = useCallback(async () => {
+        if (activePayableAmount <= 0) {
+            setQrData(null);
+            return;
+        }
+        setQrLoading(true);
+        setQrError('');
+        try {
+            const data = await getQrPayload(1, {
+                amount: activePayableAmount,
+                mode: 'json'
+            });
+            setQrData(data);
+        } catch (err) {
+            console.warn('[Billing] Error fetching UPI QR:', err);
+            setQrError(err?.message || 'Failed to generate QR code');
+        } finally {
+            setQrLoading(false);
+        }
+    }, [activePayableAmount]);
+
+    useEffect(() => {
+        if (paymentMode === 'UPI' && activePayableAmount > 0) {
+            fetchUpiQr();
+        }
+    }, [paymentMode, activePayableAmount, fetchUpiQr]);
 
     // Numeric keypad press handler
     const handleNumpadPress = (val) => {
@@ -814,6 +988,9 @@ const Billing = () => {
 
         const custId = cust.id || cust.backendId;
         if (custId) {
+            try {
+                await setCartCustomer({ customer_id: custId });
+            } catch (_) { }
             setLoyaltyLoading(true);
             try {
                 const loyRes = await getCustomerLoyalty(custId);
@@ -852,9 +1029,7 @@ const Billing = () => {
             const res = await validateCreditNote(creditNoteInput.trim(), totals.grandTotal);
             if (res && res.valid) {
                 setCreditNoteData(res);
-                const discountVal = Number(res.applicable_amount || res.amount || 0);
-                setBillDiscount(discountVal);
-                setDiscountType('flat');
+                setCreditNoteError('');
             } else {
                 setCreditNoteError(res?.message || 'Invalid or expired credit note');
             }
@@ -871,9 +1046,16 @@ const Billing = () => {
         setApiError('');
 
         const finalGrandTotal = totals.grandTotal;
-        const tenderVal = paymentMode === 'Cash' && cashTendered ? Number(cashTendered) : finalGrandTotal;
-        const changeVal = paymentMode === 'Cash' ? Math.max(0, tenderVal - finalGrandTotal) : 0;
-        const txnRef = paymentMode !== 'Cash' ? `POS-${paymentMode.toUpperCase()}-${Date.now().toString().slice(-6)}` : null;
+        const targetPayable = totals.netPayable != null ? totals.netPayable : finalGrandTotal;
+        const tenderVal = paymentMode === 'Cash' && cashTendered ? Number(cashTendered) : targetPayable;
+        const changeVal = paymentMode === 'Cash' ? Math.max(0, tenderVal - targetPayable) : 0;
+
+        const cardRef = [cardLast4 ? `x${cardLast4}` : '', cardRrn ? `RRN:${cardRrn}` : ''].filter(Boolean).join('-');
+        const txnRef = paymentMode === 'Card'
+            ? (cardRef ? `POS-CARD-${cardRef}` : `POS-CARD-${Date.now().toString().slice(-6)}`)
+            : paymentMode === 'UPI'
+                ? `POS-UPI-${Date.now().toString().slice(-6)}`
+                : null;
 
         // Auto-register or link customer into CRM if 10-digit mobile number provided
         let activeCustomerId = selectedCustomer?.id || null;
@@ -894,6 +1076,26 @@ const Billing = () => {
             }
         }
 
+        // Prepare payment splits (including credit note tender if applied)
+        const paymentSplits = [];
+        const creditNoteDeduction = Number(totals.creditNoteApplied || 0);
+        if (creditNoteDeduction > 0 && creditNoteData) {
+            paymentSplits.push({
+                payment_mode: 'wallet',
+                amount: creditNoteDeduction,
+                transaction_reference: `CN-${creditNoteData.credit_note_number || creditNoteData.note_number || creditNoteInput.trim()}`,
+            });
+        }
+        if (targetPayable > 0 || paymentSplits.length === 0) {
+            paymentSplits.push({
+                payment_mode: (paymentMode || 'cash').toLowerCase(),
+                amount: Number(targetPayable),
+                amount_tendered: Number(tenderVal),
+                change_due: Number(changeVal),
+                transaction_reference: txnRef,
+            });
+        }
+
         // Prepare live backend InvoiceCreate payload
         const invoicePayload = {
             store_id: getActiveStoreId(),
@@ -905,27 +1107,47 @@ const Billing = () => {
                 unit_price: Number(item.price),
                 discount: Number(item.discountPerItem || 0),
             })),
-            payments: [{
-                payment_mode: (paymentMode || 'cash').toLowerCase(),
-                amount: Number(finalGrandTotal),
-                amount_tendered: Number(tenderVal),
-                change_due: Number(changeVal),
-                transaction_reference: txnRef,
-            }],
+            payments: paymentSplits,
         };
+
+        // Pre-validate stock availability via Swagger stock validator
+        try {
+            const stockCheck = await validateCartStock();
+            if (stockCheck && (stockCheck.has_insufficient_stock || stockCheck.valid === false)) {
+                const shortages = stockCheck.items?.filter(i => !i.in_stock || (i.available_stock != null && i.available_stock < i.quantity)) || [];
+                if (shortages.length > 0) {
+                    const desc = shortages.map(s => s.product_name || `Product #${s.product_id}`).join(', ');
+                    setApiError(`Insufficient stock in Store for: ${desc}. Please adjust quantities.`);
+                    setSaleLoading(false);
+                    return;
+                }
+            }
+        } catch (_) { }
 
         let serverRes = null;
         try {
             serverRes = await createInvoice(invoicePayload);
         } catch (err) {
-            console.warn('[Billing] Live createInvoice API encountered error/offline, using resilient fallback:', err?.message || err);
-            serverRes = {
-                id: Date.now(),
-                invoice_number: invoiceNo,
-                total_amount: finalGrandTotal,
-                created_at: new Date().toISOString(),
-                status: 'paid',
-            };
+            console.error('[Billing] Live createInvoice API error:', err);
+            let errDetail = err?.response?.data?.detail
+                || (typeof err?.response?.data === 'string' ? err.response.data : null)
+                || err?.message
+                || 'Invoice creation failed on server. Please check order details and try again.';
+
+            // Format friendly store messages for stock/inventory constraints
+            if (typeof errDetail === 'string') {
+                const invMatch = errDetail.match(/inventory record for product with ID (\d+) in store with ID (\d+) not found/i);
+                if (invMatch) {
+                    const prodName = cart.find(i => String(i.id) === String(invMatch[1]))?.name || `Product #${invMatch[1]}`;
+                    errDetail = `"${prodName}" is not stocked in Store #${invMatch[2]} yet. Please add stock in Inventory → Stock In before billing.`;
+                } else if (/insufficient stock/i.test(errDetail)) {
+                    errDetail = 'Insufficient stock available in this store to fulfill the order.';
+                }
+            }
+
+            setApiError(errDetail);
+            setSaleLoading(false);
+            return;
         }
 
         const resolvedInvoiceId = serverRes?.invoice_number || (serverRes?.id ? `INV-${serverRes.id}` : invoiceNo);
@@ -949,18 +1171,25 @@ const Billing = () => {
             total: finalGrandTotal,
             rate: totals.gstRate,
             gst: totals.totalGST,
-            items: cart.map((item, idx) => ({
-                itemNo: idx + 1,
-                id: item.id,
-                name: item.name,
-                qty: item.qty,
-                price: item.price,
-                discount: item.discountPerItem || 0,
-                taxable: (item.price - (item.discountPerItem || 0)) * item.qty,
-                rate: totals.gstRate,
-                hsn: item.hsn || '',
-                barcode: item.barcode || '',
-            })),
+            items: cart.map((item, idx) => {
+                const itemRate = (billGstRate !== null && billGstRate !== undefined && billGstRate !== 'auto')
+                    ? Number(billGstRate)
+                    : Number(item.gstRate ?? (item.tax_rate ?? (item.gst_rate ?? 18)));
+                const lineTaxable = (item.price - (item.discountPerItem || 0)) * item.qty;
+                return {
+                    itemNo: idx + 1,
+                    id: item.id,
+                    name: item.name,
+                    qty: item.qty,
+                    price: item.price,
+                    discount: item.discountPerItem || 0,
+                    taxable: lineTaxable,
+                    rate: itemRate,
+                    gst: Math.round(((lineTaxable * itemRate) / 100) * 100) / 100,
+                    hsn: item.hsn || '',
+                    barcode: item.barcode || '',
+                };
+            }),
         };
 
         try {
@@ -983,12 +1212,30 @@ const Billing = () => {
                 amount: finalGrandTotal,
                 status: 'completed',
                 transaction_id: txnRef || `POS-CASH-${Date.now().toString().slice(-6)}`,
-                gateway_name: paymentMode === 'Card' ? 'Pine Labs EDC #01' : paymentMode === 'UPI' ? 'PhonePe Counter QR' : 'Counter Drawer 1',
+                gateway_name: paymentMode === 'Card'
+                    ? (cardRrn ? `EDC Slip RRN #${cardRrn}` : 'Pine Labs / Card EDC')
+                    : paymentMode === 'UPI'
+                        ? (qrData?.upi_id ? `Dynamic UPI QR (${qrData.upi_id})` : 'PhonePe Counter QR')
+                        : 'Counter Drawer 1',
                 created_at: new Date().toISOString(),
             });
             localStorage.setItem('retail_pos_payments', JSON.stringify(paymentsList));
         } catch (e) {
             console.error('Error saving invoice/payment to localStorage:', e);
+        }
+
+        // ── Credit Note Redemption on Backend ──
+        if (creditNoteDeduction > 0 && creditNoteData) {
+            try {
+                await redeemCreditNote({
+                    credit_note_no: String(creditNoteData.credit_note_number || creditNoteData.note_number || creditNoteInput.trim()),
+                    amount_to_redeem: creditNoteDeduction,
+                    invoice_id: serverRes?.id || null,
+                    notes: `Redeemed at POS for Invoice #${resolvedInvoiceId}`
+                });
+            } catch (cnErr) {
+                console.warn('[Billing] Credit note redemption warning:', cnErr?.message || cnErr);
+            }
         }
 
         // ── Loyalty Earn & Redeem Execution + WhatsApp Alert ──
@@ -1021,15 +1268,16 @@ const Billing = () => {
             }
 
             // 3. Send WhatsApp receipt alert
-            const cleanPhone = (customer.phone || selectedCustomer?.phone || '').replace(/\D/g, '');
-            if (cleanPhone.length === 10) {
+            const cleanCustPhone = (customer.phone || selectedCustomer?.phone || '').replace(/\D/g, '');
+            if (cleanCustPhone.length === 10) {
                 try {
+                    const storeDisplayName = effectiveBranding?.store_name || effectiveBranding?.company_name || 'RetailOS';
                     const remainingBalance = Math.max(0, customerLoyaltyPoints - (loyaltyRedeemApplied ? loyaltyPointsRedeemed : 0) + earnedPts);
                     await sendCustomerWhatsapp({
                         customer_id: activeCustomerId,
                         channel: 'whatsapp',
                         communication_type: 'WHATSAPP',
-                        message: `Dear ${customer.name || 'Shopper'}, your tax invoice #${resolvedInvoiceId} of ₹${finalGrandTotal.toLocaleString('en-IN')} has been successfully generated at Shekru Retail. You earned ${earnedPts} loyalty points on this order! Your total loyalty balance is ${remainingBalance} pts (Worth ₹${(remainingBalance * 0.10).toFixed(2)} store credit). Thank you for shopping with us! 🙏`
+                        message: `Dear ${customer.name || 'Shopper'}, your tax invoice #${resolvedInvoiceId} of ₹${finalGrandTotal.toLocaleString('en-IN')} has been successfully generated at ${storeDisplayName}. You earned ${earnedPts} loyalty points on this order! Your total loyalty balance is ${remainingBalance} pts (Worth ₹${(remainingBalance * 0.10).toFixed(2)} store credit). Thank you for shopping with us! 🙏`
                     });
                 } catch (wErr) {
                     console.warn('[Billing] WhatsApp receipt error:', wErr?.message || wErr);
@@ -1054,10 +1302,14 @@ const Billing = () => {
         }
     };
 
-    const handleReset = () => {
-        cart.forEach(item => {
-            removeCartItem(item.id).catch(() => { });
-        });
+    const handleReset = async () => {
+        setApiError('');
+        try {
+            await clearCart();
+        } catch (_) { }
+        try {
+            await removeCartCustomer();
+        } catch (_) { }
         setCart([]);
         setServerCart(null);
         setOfflineMode(false);
@@ -1067,6 +1319,10 @@ const Billing = () => {
         setLoyaltyRedeemApplied(false);
         setLoyaltyPointsRedeemed(0);
         setCashTendered('');
+        setQrData(null);
+        setCardLast4('');
+        setCardRrn('');
+        setShowQrModal(false);
         setBillDiscount(0);
         setCouponCode('');
         setCreditNoteInput('');
@@ -1172,46 +1428,11 @@ const Billing = () => {
 
     const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
 
-    // ── Apply discount via API with resilient local fallback ──────────────
+    // ── Apply discount via API ───────────────────────────────────────────
     const handleApplyDiscount = useCallback(async () => {
         const trimmedCoupon = couponCode.trim().toUpperCase();
-        let discVal = Number(billDiscount);
-        let discType = discountType;
-
-        // Support demo discount coupons
-        if (trimmedCoupon) {
-            if (trimmedCoupon === 'SAVE10') {
-                discVal = 10;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(10);
-            } else if (trimmedCoupon === 'SAVE20') {
-                discVal = 20;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(20);
-            } else if (trimmedCoupon === 'FLAT50') {
-                discVal = 50;
-                discType = 'fixed';
-                setDiscountType('fixed');
-                setBillDiscount(50);
-            } else if (trimmedCoupon === 'FLAT100') {
-                discVal = 100;
-                discType = 'fixed';
-                setDiscountType('fixed');
-                setBillDiscount(100);
-            } else if (trimmedCoupon === 'WELCOME15') {
-                discVal = 15;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(15);
-            } else if (discVal <= 0) {
-                discVal = 10;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(10);
-            }
-        }
+        const discVal = Number(billDiscount);
+        const discType = discountType;
 
         if (discVal <= 0 && !trimmedCoupon) {
             setApiError('Enter a discount value or coupon code to apply.');
@@ -1222,8 +1443,8 @@ const Billing = () => {
         setApiError('');
         try {
             const payload = {
-                discount_type: discType,   // 'percentage' | 'fixed'
-                value: Number(discVal),
+                discount_type: activePromoTab === 'coupon' ? 'coupon' : (discType === 'percentage' ? 'percentage' : 'fixed'),
+                value: Number(discVal) || 0,
                 coupon_code: trimmedCoupon || null,
             };
             const response = await applyDiscount(payload);
@@ -1235,13 +1456,18 @@ const Billing = () => {
             }
             setDiscountApplied(true);
         } catch (err) {
-            console.warn('[Billing] applyDiscount API error, falling back to local calculation:', err?.message || err);
-            // Cashier is never blocked — apply discount locally
-            setDiscountApplied(true);
+            console.error('[Billing] applyDiscount API error:', err);
+            const errMsg = err?.response?.data?.detail
+                || (typeof err?.response?.data === 'string' ? err.response.data : null)
+                || err?.message
+                || 'Failed to apply coupon or discount';
+            setApiError(errMsg);
+            setDiscountApplied(false);
+            setTimeout(() => setApiError(''), 4000);
         } finally {
             setDiscountLoading(false);
         }
-    }, [billDiscount, couponCode, discountType, syncCartWithServer]);
+    }, [activePromoTab, billDiscount, couponCode, discountType, syncCartWithServer]);
 
     const handleClearDiscount = useCallback(() => {
         setBillDiscount(0);
@@ -1322,6 +1548,41 @@ const Billing = () => {
                         </div>
                     </div>
                     <div className="pos-search-row" style={{ alignItems: 'center' }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowHeldModal(true)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '7px 12px',
+                                background: heldCarts.length > 0 ? '#fffbeb' : '#fff',
+                                border: `1.5px solid ${heldCarts.length > 0 ? '#f59e0b' : '#e2e8f0'}`,
+                                color: heldCarts.length > 0 ? '#b45309' : '#64748b',
+                                borderRadius: 10,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                whiteSpace: 'nowrap'
+                            }}
+                            title="View and recall parked bills"
+                        >
+                            <BsClockHistory size={13} color={heldCarts.length > 0 ? '#f59e0b' : '#64748b'} />
+                            <span>Held Bills</span>
+                            {heldCarts.length > 0 && (
+                                <span style={{
+                                    background: '#f59e0b',
+                                    color: '#fff',
+                                    borderRadius: 10,
+                                    fontSize: 10,
+                                    padding: '1px 6px',
+                                    fontWeight: 800
+                                }}>
+                                    {heldCarts.length}
+                                </span>
+                            )}
+                        </button>
                         {!isOrderPanelOpen && (
                             <button
                                 type="button"
@@ -1470,7 +1731,7 @@ const Billing = () => {
                                         display: 'flex',
                                         flexDirection: 'column',
                                         height: '100%',
-                                        minHeight: 295,
+                                        minHeight: 220,
                                         background: inCart ? '#fafafe' : '#ffffff',
                                         border: inCart ? '1.5px solid #818cf8' : '1.5px solid #e2e8f0',
                                         borderRadius: 14,
@@ -1943,28 +2204,52 @@ const Billing = () => {
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                 Cart Items ({cart.length})
                             </span>
-                            {cart.length > 0 && (
-                                <button
-                                    type="button"
-                                    onClick={handleReset}
-                                    style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        fontSize: 11,
-                                        color: '#ef4444',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        padding: '2px 6px',
-                                        borderRadius: 4
-                                    }}
-                                    title="Clear all items in cart"
-                                >
-                                    <BsTrash size={11} /> Clear Cart
-                                </button>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {cart.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={handleHoldBill}
+                                        style={{
+                                            background: '#fef3c7',
+                                            border: '1px solid #fde68a',
+                                            fontSize: 11,
+                                            color: '#92400e',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            padding: '3px 8px',
+                                            borderRadius: 5
+                                        }}
+                                        title="Park / Hold this bill to attend next customer"
+                                    >
+                                        <BsPauseCircleFill size={11} color="#b45309" /> Hold Bill
+                                    </button>
+                                )}
+                                {cart.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={handleReset}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: 11,
+                                            color: '#ef4444',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            padding: '2px 6px',
+                                            borderRadius: 4
+                                        }}
+                                        title="Clear all items in cart"
+                                    >
+                                        <BsTrash size={11} /> Clear
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Cart items list */}
@@ -2421,9 +2706,9 @@ const Billing = () => {
                                 </div>
                                 <div className="pos-summary-row" style={{ alignItems: 'center' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                        <span>GST ({totals.gstRate}%)</span>
+                                        <span>GST ({billGstRate === 'auto' ? `Item-wise (${totals.gstRate}%)` : `${totals.gstRate}%`})</span>
                                         <div style={{ display: 'inline-flex', gap: 3, background: '#f1f5f9', padding: '2px 4px', borderRadius: 6 }}>
-                                            {[0, 5, 12, 18, 28].map(r => (
+                                            {['auto', 0, 5, 12, 18, 28].map(r => (
                                                 <button
                                                     key={r}
                                                     type="button"
@@ -2439,9 +2724,9 @@ const Billing = () => {
                                                         cursor: 'pointer',
                                                         transition: 'all .15s',
                                                     }}
-                                                    title={`Set Bill GST to ${r}%`}
+                                                    title={r === 'auto' ? 'Statutory Item-wise GST (HSN)' : `Override Bill GST to ${r}%`}
                                                 >
-                                                    {r}%
+                                                    {r === 'auto' ? 'Item-wise' : `${r}%`}
                                                 </button>
                                             ))}
                                         </div>
@@ -2450,14 +2735,20 @@ const Billing = () => {
                                 </div>
                                 {totals.totalGST > 0 && (
                                     <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', justifyContent: 'space-between', paddingLeft: 8, paddingRight: 4, marginBottom: 6 }}>
-                                        <span>CGST ({totals.gstRate / 2}%): ₹{totals.cgstAmount?.toFixed(2)} | SGST ({totals.gstRate / 2}%): ₹{totals.sgstAmount?.toFixed(2)}</span>
+                                        <span>CGST: ₹{totals.cgstAmount?.toFixed(2)} | SGST: ₹{totals.sgstAmount?.toFixed(2)}</span>
                                         {totals.igstAmount > 0 && <span>IGST: ₹{totals.igstAmount.toFixed(2)}</span>}
+                                    </div>
+                                )}
+                                {totals.creditNoteApplied > 0 && (
+                                    <div className="pos-summary-row" style={{ color: '#059669', fontWeight: 600 }}>
+                                        <span>Credit Note Applied</span>
+                                        <span>−₹{totals.creditNoteApplied.toFixed(2)}</span>
                                     </div>
                                 )}
                                 <div className="pos-summary-divider" />
                                 <div className="pos-summary-total">
-                                    <span>Grand Total</span>
-                                    <span className="pos-grand-amount">₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    <span>{totals.creditNoteApplied > 0 ? 'Net Payable' : 'Grand Total'}</span>
+                                    <span className="pos-grand-amount">₹{(totals.netPayable != null ? totals.netPayable : totals.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                             </div>
 
@@ -2567,27 +2858,165 @@ const Billing = () => {
                                 </div>
                             )}
 
-                            {/* UPI QR Display Section */}
+                            {/* UPI Dynamic QR Display Section */}
                             {paymentMode === 'UPI' && (
                                 <div style={{
-                                    background: '#eef2ff',
-                                    border: '1.5px solid #c7d2fe',
-                                    borderRadius: 10,
-                                    padding: '10px 14px',
+                                    background: '#f8fafc',
+                                    border: '1.5px solid #cbd5e1',
+                                    borderRadius: 12,
+                                    padding: '12px',
                                     marginTop: 8,
                                     marginBottom: 8,
                                     display: 'flex',
+                                    flexDirection: 'column',
                                     alignItems: 'center',
-                                    justifyContent: 'space-between',
+                                    gap: 10,
+                                    textAlign: 'center',
                                 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <BsQrCode size={20} color="#4f46e5" />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <BsQrCode size={16} color="#4f46e5" />
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
+                                                UPI Dynamic QR
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={fetchUpiQr}
+                                            disabled={qrLoading}
+                                            style={{
+                                                background: '#f1f5f9', border: '1px solid #cbd5e1',
+                                                borderRadius: 6, padding: '2px 8px', fontSize: 10.5,
+                                                fontWeight: 600, color: '#475569', cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', gap: 4
+                                            }}
+                                            title="Regenerate QR"
+                                        >
+                                            <BsArrowCounterclockwise size={11} className={qrLoading ? 'animate-spin' : ''} />
+                                            {qrLoading ? 'Loading…' : 'Regenerate'}
+                                        </button>
+                                    </div>
+
+                                    {/* QR Code Canvas / Base64 Display */}
+                                    <div style={{
+                                        width: 170,
+                                        height: 170,
+                                        background: '#fff',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: 10,
+                                        padding: 8,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                                        position: 'relative'
+                                    }}>
+                                        {qrLoading ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ fontSize: 11, color: '#64748b' }}>Generating QR…</span>
+                                            </div>
+                                        ) : qrData?.qr_code_base64 ? (
+                                            <img
+                                                src={`data:image/png;base64,${qrData.qr_code_base64}`}
+                                                alt="UPI QR Code"
+                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                            />
+                                        ) : qrData?.qr_payload ? (
+                                            <img
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrData.qr_payload)}`}
+                                                alt="UPI QR Code"
+                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                }}
+                                            />
+                                        ) : (
+                                            <div style={{ textAlign: 'center', color: '#94a3b8' }}>
+                                                <BsQrCode size={48} />
+                                                <p style={{ margin: '4px 0 0', fontSize: 10 }}>Add items to generate QR</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ width: '100%' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569', marginBottom: 2 }}>
+                                            <span>Scan to pay exact:</span>
+                                            <span style={{ fontWeight: 800, color: '#059669', fontSize: 13 }}>
+                                                ₹{(totals.netPayable != null ? totals.netPayable : totals.grandTotal).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: 10, color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>Payee: <strong style={{ color: '#334155' }}>{qrData?.upi_id || 'Store UPI'}</strong></span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowQrModal(true)}
+                                                style={{ background: 'none', border: 'none', color: '#4f46e5', fontWeight: 700, padding: 0, cursor: 'pointer', fontSize: 10.5 }}
+                                            >
+                                                ⛶ Expand
+                                            </button>
+                                        </div>
+                                        <p style={{ margin: '6px 0 0', fontSize: 9.5, color: '#94a3b8' }}>
+                                            Supports Google Pay • PhonePe • Paytm • BHIM • Cred
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Card Details Section */}
+                            {paymentMode === 'Card' && (
+                                <div style={{
+                                    background: '#f8fafc',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: 10,
+                                    padding: '10px 12px',
+                                    marginTop: 8,
+                                    marginBottom: 8,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 8,
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <BsCreditCard2Front size={16} color="#4f46e5" />
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                                            Card / EDC Settlement Details
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                                         <div>
-                                            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#312e81' }}>UPI Dynamic QR Stand Ready</p>
-                                            <p style={{ margin: 0, fontSize: 11, color: '#6366f1' }}>Customer scans on counter screen to pay</p>
+                                            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: '#64748b', marginBottom: 2 }}>
+                                                Card Last 4 Digits
+                                            </label>
+                                            <input
+                                                type="text"
+                                                maxLength={4}
+                                                placeholder="e.g. 4242"
+                                                value={cardLast4}
+                                                onChange={e => setCardLast4(e.target.value.replace(/\D/g, ''))}
+                                                style={{
+                                                    width: '100%', border: '1px solid #cbd5e1', borderRadius: 6,
+                                                    padding: '4px 8px', fontSize: 12, fontWeight: 600, outline: 'none'
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: '#64748b', marginBottom: 2 }}>
+                                                EDC Slip RRN / Auth
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. 982341"
+                                                value={cardRrn}
+                                                onChange={e => setCardRrn(e.target.value.trim())}
+                                                style={{
+                                                    width: '100%', border: '1px solid #cbd5e1', borderRadius: 6,
+                                                    padding: '4px 8px', fontSize: 12, fontWeight: 600, outline: 'none'
+                                                }}
+                                            />
                                         </div>
                                     </div>
-                                    <span style={{ fontSize: 13, fontWeight: 800, color: '#4f46e5' }}>₹{totals.grandTotal.toFixed(2)}</span>
+                                    <span style={{ fontSize: 10, color: '#64748b' }}>
+                                        Amount to swipe on terminal: <strong style={{ color: '#0f172a' }}>₹{(totals.netPayable != null ? totals.netPayable : totals.grandTotal).toFixed(2)}</strong>
+                                    </span>
                                 </div>
                             )}
 
@@ -2610,19 +3039,43 @@ const Billing = () => {
                         {apiError && (
                             <div style={{
                                 background: '#fef3c7', color: '#92400e',
-                                borderRadius: 8, padding: '6px 10px',
-                                fontSize: 11,
+                                borderRadius: 8, padding: '7px 10px',
+                                fontSize: 11, lineHeight: 1.4,
                                 border: '1px solid #fcd34d',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
                             }}>
-                                ⚠️ {apiError}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flex: 1 }}>
+                                    <span style={{ fontSize: 13, flexShrink: 0 }}>⚠️</span>
+                                    <span>{apiError}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setApiError('')}
+                                    style={{
+                                        background: 'none', border: 'none', color: '#92400e',
+                                        cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: 0,
+                                        lineHeight: 1, opacity: 0.7,
+                                    }}
+                                    title="Dismiss"
+                                >
+                                    ✕
+                                </button>
                             </div>
                         )}
 
                         <div className="pos-action-row">
-                            <button className="pos-btn-reset" onClick={handleReset} title="Clear cart">
-                                <BsArrowCounterclockwise size={15} />
+                            <button
+                                type="button"
+                                className="pos-btn-reset"
+                                onClick={handleReset}
+                                disabled={cart.length === 0 || saleLoading}
+                                title="Clear all items in cart"
+                            >
+                                <BsTrash size={15} />
+                                <span>Clear</span>
                             </button>
                             <button
+                                type="button"
                                 className="pos-btn-checkout"
                                 disabled={cart.length === 0 || saleLoading}
                                 onClick={handleFinishSale}
@@ -2700,16 +3153,14 @@ const Billing = () => {
                                         <p className="pos-receipt-meta-value" style={{ fontFamily: 'monospace', fontSize: 11 }}>{customer.gstin}</p>
                                     </div>
                                 )}
-                                <div style={{ textAlign: customer.gstin && customer.gstin !== '—' ? 'right' : 'left' }}>
+                                <div>
                                     <p className="pos-receipt-meta-label">Payment Mode</p>
-                                    <p className="pos-receipt-meta-value">{paymentMode} {paymentMode === 'Cash' && cashTendered ? `(Paid: ₹${Number(cashTendered).toLocaleString()})` : ''}</p>
+                                    <p className="pos-receipt-meta-value" style={{ fontWeight: 700 }}>{paymentMode}</p>
                                 </div>
-                                {paymentMode === 'Cash' && changeDue > 0 && (
-                                    <div style={{ gridColumn: '1 / -1', background: '#ecfdf5', padding: '4px 8px', borderRadius: 4, display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: '#065f46' }}>
-                                        <span>Change Returned:</span>
-                                        <span>₹{changeDue.toFixed(2)}</span>
-                                    </div>
-                                )}
+                                <div style={{ textAlign: 'right' }}>
+                                    <p className="pos-receipt-meta-label">Payment Status</p>
+                                    <p className="pos-receipt-meta-value" style={{ fontWeight: 800, color: '#059669' }}>Paid</p>
+                                </div>
                             </div>
 
                             <div className="pos-receipt-divider-dots" />
@@ -2735,7 +3186,7 @@ const Billing = () => {
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6b7280', paddingLeft: 32 }}>
-                                            <span>HSN: {item.hsn || '—'} {item.barcode ? `• Barcode: ${item.barcode}` : ''}</span>
+                                            <span>HSN: {item.hsn || '—'} {item.barcode ? `• Barcode: ${item.barcode}` : ''} • GST: {item.gstRate ?? 18}%</span>
                                             <span>Taxable: ₹{((item.price - (item.discountPerItem || 0)) * item.qty).toFixed(2)}</span>
                                         </div>
                                     </div>
@@ -2767,26 +3218,88 @@ const Billing = () => {
                                     <span>₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                                 <div className="pos-receipt-sum-row">
-                                    <span>GST Total ({totals.gstRate}%)</span>
+                                    <span>GST Total ({totals.isItemWiseGst ? `Item-wise (~${totals.gstRate}%)` : `${totals.gstRate}%`})</span>
                                     <span>₹{totals.totalGST.toFixed(2)}</span>
                                 </div>
                                 {totals.totalGST > 0 && (
                                     <div className="pos-receipt-sum-row" style={{ fontSize: 10, color: '#6b7280', marginTop: -4 }}>
-                                        <span>CGST ({totals.gstRate / 2}%) / SGST ({totals.gstRate / 2}%)</span>
-                                        <span>₹{totals.cgstAmount.toFixed(2)} / ₹{totals.sgstAmount.toFixed(2)}</span>
+                                        <span>CGST: ₹{totals.cgstAmount.toFixed(2)} | SGST: ₹{totals.sgstAmount.toFixed(2)}</span>
                                     </div>
                                 )}
                                 {totals.igstAmount > 0 && (
                                     <div className="pos-receipt-sum-row" style={{ fontSize: 10, color: '#6b7280', marginTop: -4 }}>
-                                        <span>IGST</span>
-                                        <span>₹{totals.igstAmount.toFixed(2)}</span>
+                                        <span>IGST: ₹{totals.igstAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                {totals.creditNoteApplied > 0 && (
+                                    <div className="pos-receipt-sum-row" style={{ color: '#059669', fontWeight: 600 }}>
+                                        <span>Credit Note Applied</span>
+                                        <span>−₹{totals.creditNoteApplied.toFixed(2)}</span>
                                     </div>
                                 )}
                             </div>
 
                             <div className="pos-receipt-total-box">
-                                <span>TOTAL PAID</span>
-                                <span className="pos-receipt-total-amount">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
+                                <span>{totals.creditNoteApplied > 0 ? 'NET PAYABLE' : 'TOTAL PAYABLE'}</span>
+                                <span className="pos-receipt-total-amount">
+                                    ₹{(totals.netPayable != null ? totals.netPayable : totals.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                            </div>
+
+                            {/* ── Separate Payment Details Breakdown (Receipt & Print) ── */}
+                            <div className="pos-receipt-payment-breakdown" style={{
+                                marginTop: 10,
+                                padding: '10px 14px',
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6,
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px dashed #cbd5e1', paddingBottom: 5, marginBottom: 2 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Payment Details</span>
+                                    <span style={{ fontSize: 10, fontWeight: 800, color: '#059669', background: '#dcfce7', padding: '1px 6px', borderRadius: 4 }}>PAID</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#334155' }}>
+                                    <span style={{ color: '#64748b' }}>Payment Mode:</span>
+                                    <span style={{ fontWeight: 700 }}>{paymentMode}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#334155' }}>
+                                    <span style={{ color: '#64748b' }}>Total Payable:</span>
+                                    <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                                        ₹{(totals.netPayable != null ? totals.netPayable : totals.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                {paymentMode === 'Cash' ? (
+                                    <>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#1e40af' }}>
+                                            <span style={{ color: '#64748b' }}>Cash Received:</span>
+                                            <span style={{ fontWeight: 800 }}>
+                                                ₹{(cashTendered ? Number(cashTendered) : (totals.netPayable != null ? totals.netPayable : totals.grandTotal)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            fontSize: 12,
+                                            color: '#065f46',
+                                            background: '#ecfdf5',
+                                            padding: '4px 8px',
+                                            borderRadius: 4,
+                                            fontWeight: 700,
+                                            marginTop: 2
+                                        }}>
+                                            <span>Change Returned:</span>
+                                            <span>₹{(Number(changeDue) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#065f46', fontWeight: 700 }}>
+                                        <span style={{ color: '#64748b' }}>Amount Tendered:</span>
+                                        <span>₹{(totals.netPayable != null ? totals.netPayable : totals.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                )}
                             </div>
 
                             {selectedCustomer && Math.floor(totals.grandTotal / 100) > 0 && (
@@ -3186,6 +3699,190 @@ const Billing = () => {
                                 {numpadTarget === 'barcode' ? 'Scan' : 'Apply'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Customer Counter UPI QR Fullscreen/Popup Modal ── */}
+            {showQrModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)',
+                    backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', zIndex: 9999, padding: 16
+                }}>
+                    <div style={{
+                        background: '#fff', borderRadius: 20, width: '100%', maxWidth: 360,
+                        padding: 24, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <BsQrCode size={20} color="#4f46e5" />
+                                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
+                                    Customer UPI Screen
+                                </h4>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowQrModal(false)}
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4 }}
+                            >
+                                <BsX size={24} />
+                            </button>
+                        </div>
+
+                        <p style={{ margin: '0 0 16px', fontSize: 12, color: '#64748b' }}>
+                            Scan with Google Pay, PhonePe, Paytm or any UPI app
+                        </p>
+
+                        <div style={{
+                            width: 240, height: 240, background: '#fff',
+                            border: '2px solid #e2e8f0', borderRadius: 16, padding: 12,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
+                            marginBottom: 16
+                        }}>
+                            {qrLoading ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 12, color: '#64748b' }}>Generating Dynamic QR…</span>
+                                </div>
+                            ) : qrData?.qr_code_base64 ? (
+                                <img
+                                    src={`data:image/png;base64,${qrData.qr_code_base64}`}
+                                    alt="UPI QR Code"
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                />
+                            ) : qrData?.qr_payload ? (
+                                <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrData.qr_payload)}`}
+                                    alt="UPI QR Code"
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                />
+                            ) : (
+                                <BsQrCode size={120} color="#cbd5e1" />
+                            )}
+                        </div>
+
+                        <div style={{ width: '100%', background: '#f8fafc', padding: '12px 16px', borderRadius: 12, marginBottom: 16 }}>
+                            <span style={{ fontSize: 12, color: '#64748b', display: 'block' }}>Amount to Pay</span>
+                            <span style={{ fontSize: 26, fontWeight: 900, color: '#059669' }}>
+                                ₹{(totals.netPayable != null ? totals.netPayable : totals.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#475569', display: 'block', marginTop: 4 }}>
+                                Payee: <strong>{qrData?.upi_id || 'Store Merchant'}</strong>
+                            </span>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setShowQrModal(false)}
+                            style={{
+                                width: '100%', background: '#4f46e5', color: '#fff',
+                                border: 'none', borderRadius: 10, padding: '10px 16px',
+                                fontSize: 13, fontWeight: 700, cursor: 'pointer'
+                            }}
+                        >
+                            Done / Return to Billing
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Held Bills (Parked Sales) Modal ── */}
+            {showHeldModal && (
+                <div className="ec-modal-overlay" onClick={() => setShowHeldModal(false)}>
+                    <div
+                        className="pos-receipt-modal"
+                        onClick={e => e.stopPropagation()}
+                        style={{ maxWidth: 540, width: '100%', padding: 24, borderRadius: 16 }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <BsClockHistory size={20} color="#b45309" />
+                                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#1e293b' }}>
+                                    Held / Parked Bills ({heldCarts.length})
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowHeldModal(false)}
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4 }}
+                            >
+                                <BsX size={22} />
+                            </button>
+                        </div>
+
+                        {heldLoading ? (
+                            <div style={{ padding: '30px 0', textAlign: 'center', color: '#64748b' }}>
+                                Loading held bills…
+                            </div>
+                        ) : heldCarts.length === 0 ? (
+                            <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8' }}>
+                                <BsClockHistory size={36} color="#cbd5e1" style={{ display: 'block', margin: '0 auto 12px' }} />
+                                <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>No bills currently on hold</p>
+                                <p style={{ margin: '4px 0 0', fontSize: 12 }}>Click "Hold Bill" in the cart to park a sale temporarily.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 380, overflowY: 'auto' }}>
+                                {heldCarts.map((h, idx) => (
+                                    <div
+                                        key={h.id || idx}
+                                        style={{
+                                            border: '1.5px solid #e2e8f0', borderRadius: 12, padding: 14,
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                                            background: '#f8fafc'
+                                        }}
+                                    >
+                                        <div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                                                {h.customer_name || 'Walk-in Customer'}
+                                                {h.customer_phone && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 6 }}>({h.customer_phone})</span>}
+                                            </div>
+                                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                                Hold #{h.id || idx + 1} • {h.items?.length || h.item_count || 1} items
+                                                {h.total_amount != null && (
+                                                    <strong style={{ color: '#059669', marginLeft: 6 }}>
+                                                        ₹{Number(h.total_amount).toFixed(2)}
+                                                    </strong>
+                                                )}
+                                            </div>
+                                            {h.notes && (
+                                                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                                                    {h.notes}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRecallBill(h.id)}
+                                                style={{
+                                                    background: '#4f46e5', color: '#fff', border: 'none',
+                                                    borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                                                }}
+                                            >
+                                                <BsPlayCircleFill size={13} />
+                                                Recall
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCancelHeldBill(h.id)}
+                                                style={{
+                                                    background: '#fff', color: '#ef4444', border: '1px solid #fecaca',
+                                                    borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 700,
+                                                    cursor: 'pointer'
+                                                }}
+                                                title="Discard this held cart"
+                                            >
+                                                <BsTrash size={13} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

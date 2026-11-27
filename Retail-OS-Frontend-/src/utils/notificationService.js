@@ -25,16 +25,18 @@ const sanitizeMessage = (message) => {
 /**
  * Dispatches an event for the in-app notification center / bell dropdown
  */
-const dispatchSystemNotification = (title, message, type = 'info') => {
+const dispatchSystemNotification = (title, message, type = 'info', options = {}) => {
     try {
         const event = new CustomEvent('retail-os:notification', {
             detail: {
-                id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                id: options.id || `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 title,
                 message: sanitizeMessage(message),
                 type,
                 timestamp: new Date().toISOString(),
                 time: 'Just now',
+                link: options.link || null,
+                linkText: options.linkText || null,
             }
         });
         window.dispatchEvent(event);
@@ -44,36 +46,40 @@ const dispatchSystemNotification = (title, message, type = 'info') => {
 };
 
 export const notificationService = {
-    success: (message, title = 'Success') => {
+    success: (message, title = 'Success', options = {}) => {
         const cleanMsg = sanitizeMessage(message);
         toast.success(cleanMsg, {
             toastId: `success-${cleanMsg.slice(0, 30)}`,
         });
-        dispatchSystemNotification(title, cleanMsg, 'success');
+        dispatchSystemNotification(title, cleanMsg, 'success', options);
     },
 
-    error: (message, title = 'Error') => {
+    error: (message, title = 'Error', options = {}) => {
         const cleanMsg = sanitizeMessage(message);
         toast.error(cleanMsg, {
             toastId: `error-${cleanMsg.slice(0, 30)}`,
         });
-        dispatchSystemNotification(title, cleanMsg, 'error');
+        dispatchSystemNotification(title, cleanMsg, 'error', options);
     },
 
-    info: (message, title = 'Info') => {
+    info: (message, title = 'Info', options = {}) => {
         const cleanMsg = sanitizeMessage(message);
         toast.info(cleanMsg, {
             toastId: `info-${cleanMsg.slice(0, 30)}`,
         });
-        dispatchSystemNotification(title, cleanMsg, 'info');
+        dispatchSystemNotification(title, cleanMsg, 'info', options);
     },
 
-    warning: (message, title = 'Warning') => {
+    warning: (message, title = 'Warning', options = {}) => {
         const cleanMsg = sanitizeMessage(message);
         toast.warn(cleanMsg, {
             toastId: `warn-${cleanMsg.slice(0, 30)}`,
         });
-        dispatchSystemNotification(title, cleanMsg, 'warning');
+        dispatchSystemNotification(title, cleanMsg, 'warning', options);
+    },
+
+    emit: (title, message, type = 'info', options = {}) => {
+        dispatchSystemNotification(title, message, type, options);
     },
 
     sanitize: sanitizeMessage,

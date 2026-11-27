@@ -10798,7 +10798,7 @@ export const StoreTransfersPage = () => {
     return (
         <div className="store-transfers-page-root" style={{ width: '100%', minHeight: '100%' }}>
             <ModuleContainer
-            title="Inter-Store Stock Transfers"
+            title="Store Transfer"
             subtitle="Transfer products between retail outlets, generate gate passes and track in-transit stock"
             icon={<BsArrowLeftRight />}
             actionBtn={

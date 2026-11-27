@@ -1006,7 +1006,7 @@ const Customers = () => {
     };
 
     return (
-        <div className="dash-page" style={{ paddingBottom: 24 }}>
+        <div className="dash-page dash-page--full" style={{ paddingBottom: 24 }}>
             {/* ── Toast Notification Banner ── */}
             {notification && (
                 <div

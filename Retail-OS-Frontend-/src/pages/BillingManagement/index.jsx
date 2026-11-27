@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, LineChart, Line,
-} from 'recharts';
-import {
     BsFileEarmarkText, BsDownload, BsSearch, BsFilter,
     BsCheckCircleFill, BsHourglassSplit, BsXCircleFill,
     BsPrinter, BsCurrencyRupee, BsReceiptCutoff, BsCartCheck,
@@ -12,7 +8,8 @@ import {
     BsPlusCircle, BsEyeFill, BsLightningChargeFill, BsArrowRepeat,
     BsFileEarmarkPdf, BsCreditCard, BsTrash, BsSliders, BsInfoCircle,
     BsCalendar3, BsShop, BsPerson, BsCashStack, BsCheck2Circle,
-    BsArrowReturnLeft
+    BsArrowReturnLeft, BsWhatsapp, BsThreeDotsVertical,
+    BsChevronLeft, BsChevronRight
 } from 'react-icons/bs';
 
 import {
@@ -31,6 +28,7 @@ import {
     voidInvoice,
     getInvoiceByNumber,
     getInvoicePdfStatus,
+    sendInvoiceWhatsApp,
     getStores,
     getCustomers,
     getProducts,
@@ -150,6 +148,7 @@ const BillingManagement = () => {
     // ── Search & Filter State ──────────────────────────────────────────────
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const searchInputRef = useRef(null);
     const [searchFilters, setSearchFilters] = useState({
         invoice_number: '',
         customer_name: '',
@@ -162,7 +161,8 @@ const BillingManagement = () => {
     });
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [page, setPage] = useState(1);
-    const perPage = 10;
+    const [pageSize, setPageSize] = useState(10);
+    const perPage = pageSize;
 
     // ── Notifications / Toast banner ──────────────────────────────────────
     const [alertMsg, setAlertMsg] = useState(null);
@@ -175,6 +175,27 @@ const BillingManagement = () => {
     const [invoices, setInvoices] = useState([]);
     const [loadingInvoices, setLoadingInvoices] = useState(true);
     const [fetchError, setFetchError] = useState(null);
+
+    // ── Table Row Action Dropdown Menu State ────────────────────────────────
+    const [openActionMenuId, setOpenActionMenuId] = useState(null);
+
+    // Close action dropdown menu on outside click or escape
+    useEffect(() => {
+        const handleOutsideClick = (e) => {
+            if (!e.target.closest('.action-dropdown-wrap')) {
+                setOpenActionMenuId(null);
+            }
+        };
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') setOpenActionMenuId(null);
+        };
+        document.addEventListener('click', handleOutsideClick);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('click', handleOutsideClick);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, []);
 
     // ── Metadata for Dropdowns ─────────────────────────────────────────────
     const [availableStores, setAvailableStores] = useState([]);
@@ -193,7 +214,7 @@ const BillingManagement = () => {
             { product_id: 1, quantity: 1, unit_price: 500, discount: 0 },
         ],
         payments: [
-            { payment_mode: 'cash', amount: 590, transaction_reference: '' },
+            { payment_mode: 'cash', amount: 500, transaction_reference: '' },
         ],
     });
 
@@ -239,7 +260,7 @@ const BillingManagement = () => {
         if (availableProducts.length > 0) {
             const firstProd = availableProducts[0];
             const price = Number(firstProd.price || firstProd.selling_price || 500);
-            const totalWithGst = Math.round(price * 1.18 * 100) / 100;
+            const orderTotal = Math.round(price * 100) / 100;
             setNewInvoiceData(prev => {
                 const currentPid = prev.items[0]?.product_id;
                 const matchedProd = availableProducts.find(p => p.id === currentPid);
@@ -258,10 +279,10 @@ const BillingManagement = () => {
                         payments: [
                             {
                                 payment_mode: 'cash',
-                                amount: totalWithGst,
+                                amount: orderTotal,
                                 transaction_reference: '',
-                                amount_tendered: Math.ceil(totalWithGst),
-                                change_due: Math.max(0, Math.round((Math.ceil(totalWithGst) - totalWithGst) * 100) / 100),
+                                amount_tendered: Math.ceil(orderTotal),
+                                change_due: Math.max(0, Math.round((Math.ceil(orderTotal) - orderTotal) * 100) / 100),
                             }
                         ]
                     };
@@ -287,8 +308,11 @@ const BillingManagement = () => {
             // Build backend query parameters strictly conforming to OpenAPI GET /api/v1/invoices
             const queryParams = {};
             if (searchFilters.store_id) queryParams.store_id = Number(searchFilters.store_id);
-            if (searchFilters.payment_status && searchFilters.payment_status !== 'all') {
-                queryParams.payment_status = searchFilters.payment_status;
+
+            const allowedPaymentStatuses = ['paid', 'unpaid', 'partial', 'cancelled', 'completed', 'pending', 'failed'];
+            const pStatus = (searchFilters.payment_status || '').toLowerCase().trim();
+            if (pStatus && pStatus !== 'all' && allowedPaymentStatuses.includes(pStatus)) {
+                queryParams.payment_status = pStatus;
             }
             if (searchFilters.date_from) queryParams.date_from = searchFilters.date_from;
             if (searchFilters.date_to) queryParams.date_to = searchFilters.date_to;
@@ -359,14 +383,13 @@ const BillingManagement = () => {
     }, []);
 
     // ── Direct Invoice or Order ID Lookup ──────────────────────────────────
-    const [lookupId, setLookupId] = useState('');
     const [lookupLoading, setLookupLoading] = useState(false);
     const [lookupError, setLookupError] = useState('');
 
-    const handleLookup = async () => {
-        const query = lookupId.trim();
+    const handleLookup = async (overrideQuery) => {
+        const query = (overrideQuery || searchTerm || '').trim();
         if (!query) {
-            setLookupError('Please enter an Invoice ID or Order ID.');
+            setLookupError('Please enter an Invoice ID, Order ID, or Invoice Number.');
             return;
         }
         setLookupLoading(true);
@@ -392,7 +415,8 @@ const BillingManagement = () => {
                 found = invoices.find(
                     (inv) => String(inv.id) === query ||
                              String(inv.order_id) === query ||
-                             String(inv.invoice_number).toLowerCase() === query.toLowerCase()
+                             String(inv.invoice_number).toLowerCase() === query.toLowerCase() ||
+                             String(inv.invoice_number).toLowerCase().includes(query.toLowerCase())
                 );
             }
 
@@ -400,7 +424,7 @@ const BillingManagement = () => {
                 setSelectedInvoice(found);
                 setShowDetailModal(true);
             } else {
-                setLookupError(`No invoice found matching "${query}".`);
+                setLookupError(`No invoice found matching "${query}". Verify the invoice number or order ID.`);
             }
         } catch (err) {
             setLookupError(err.message || 'Error looking up invoice.');
@@ -792,9 +816,35 @@ const BillingManagement = () => {
         }
     };
 
+    // ── WhatsApp Share Modal State (POST /api/v1/invoices/{id}/whatsapp) ────
+    const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+    const [whatsAppInvoice, setWhatsAppInvoice] = useState(null);
+    const [whatsAppPhone, setWhatsAppPhone] = useState('');
+    const [whatsAppLoading, setWhatsAppLoading] = useState(false);
+
+    const handleOpenWhatsAppModal = (inv) => {
+        setWhatsAppInvoice(inv);
+        setWhatsAppPhone(inv.customer_phone || inv.customer?.phone || inv.phone || '');
+        setShowWhatsAppModal(true);
+    };
+
+    const handleSendWhatsAppSubmit = async () => {
+        if (!whatsAppInvoice?.id || whatsAppLoading) return;
+        setWhatsAppLoading(true);
+        try {
+            const res = await sendInvoiceWhatsApp(whatsAppInvoice.id, whatsAppPhone.trim() || null);
+            showAlert(res?.message || `Invoice #${whatsAppInvoice.invoice_number || whatsAppInvoice.id} queued for WhatsApp delivery!`, 'success');
+            setShowWhatsAppModal(false);
+        } catch (err) {
+            showAlert(err.message || 'Failed to dispatch WhatsApp message.', 'error');
+        } finally {
+            setWhatsAppLoading(false);
+        }
+    };
+
     // ── Create Invoice Modal State (Form helpers & submission) ──
 
-    // Helper to calculate estimated total from line items and tax
+    // Helper to calculate estimated total from line items (retail price inclusive of GST)
     const calculateEstimatedGrandTotal = (items, sameState = true) => {
         let subtotal = 0;
         let discount = 0;
@@ -805,9 +855,8 @@ const BillingManagement = () => {
             subtotal += p * q;
             discount += d;
         });
-        const taxable = Math.max(0, subtotal - discount);
-        const tax = (taxable * 18) / 100;
-        return Math.round((taxable + tax) * 100) / 100;
+        const orderTotal = Math.max(0, subtotal - discount);
+        return Math.round(orderTotal * 100) / 100;
     };
 
     // Helper to update line items and auto-sync payments if single split
@@ -842,7 +891,7 @@ const BillingManagement = () => {
         const prodId = firstProd ? firstProd.id : 1;
         const price = firstProd ? Number(firstProd.price || firstProd.selling_price || 500) : 500;
         const lineTotal = price;
-        const grandTotal = Math.round((lineTotal + (lineTotal * 0.18)) * 100) / 100;
+        const grandTotal = Math.round(lineTotal * 100) / 100;
 
         setNewInvoiceData({
             store_id: firstStore,
@@ -903,14 +952,15 @@ const BillingManagement = () => {
             totalDiscount += disc;
         });
 
-        const taxableAmount = Math.max(0, itemsSubtotal - totalDiscount);
-        // Standard Indian GST rate estimation (18%)
+        // Backend order total calculation: sum(qty * price - disc)
+        const grandTotal = Math.max(0, itemsSubtotal - totalDiscount);
+        // Retail pricing: GST is inclusive within product selling price
         const taxRate = 18;
-        const totalTax = (taxableAmount * taxRate) / 100;
-        const cgst = newInvoiceData.same_state ? totalTax / 2 : 0;
-        const sgst = newInvoiceData.same_state ? totalTax / 2 : 0;
+        const taxableAmount = Math.round((grandTotal / (1 + taxRate / 100)) * 100) / 100;
+        const totalTax = Math.round((grandTotal - taxableAmount) * 100) / 100;
+        const cgst = newInvoiceData.same_state ? Math.round((totalTax / 2) * 100) / 100 : 0;
+        const sgst = newInvoiceData.same_state ? Math.round((totalTax / 2) * 100) / 100 : 0;
         const igst = newInvoiceData.same_state ? 0 : totalTax;
-        const grandTotal = taxableAmount + totalTax;
 
         const totalPayments = newInvoiceData.payments.reduce((s, p) => s + Number(p.amount || 0), 0);
         const paymentDifference = totalPayments - grandTotal;
@@ -941,29 +991,52 @@ const BillingManagement = () => {
                 throw new Error('Please add at least one line item.');
             }
 
+            // Calculate exact expected order total: sum(quantity * unit_price - discount)
+            let calculatedOrderTotal = 0;
+            const itemsPayload = newInvoiceData.items.map((it) => {
+                const q = Number(it.quantity) || 1;
+                const p = Number(it.unit_price) || 0;
+                const d = Number(it.discount) || 0;
+                calculatedOrderTotal += (q * p) - d;
+                return {
+                    product_id: Number(it.product_id) || 1,
+                    quantity: q,
+                    unit_price: p,
+                    discount: d,
+                };
+            });
+            calculatedOrderTotal = Math.round(Math.max(0, calculatedOrderTotal) * 100) / 100;
+
+            let paymentsPayload = newInvoiceData.payments.map((p) => {
+                let mode = (p.payment_mode || 'cash').toLowerCase().trim();
+                if (mode === 'netbanking' || mode === 'net_banking') mode = 'card';
+                const allowed = ['cash', 'upi', 'card', 'credit_card', 'debit_card', 'wallet', 'qr'];
+                if (!allowed.includes(mode)) mode = 'cash';
+                return {
+                    payment_mode: mode,
+                    amount: Number(p.amount) || 0,
+                    transaction_reference: p.transaction_reference ? String(p.transaction_reference).trim() : null,
+                };
+            });
+
+            // If single payment split, ensure it strictly matches the calculated order total
+            if (paymentsPayload.length === 1) {
+                paymentsPayload[0].amount = calculatedOrderTotal;
+            } else {
+                const totalPaid = paymentsPayload.reduce((s, p) => s + p.amount, 0);
+                if (Math.abs(totalPaid - calculatedOrderTotal) > 0.01) {
+                    throw new Error(`Payment total (₹${totalPaid.toFixed(2)}) must match order total (₹${calculatedOrderTotal.toFixed(2)}). Please click "Auto-Match Total" or adjust split amounts.`);
+                }
+            }
+
             const payload = {
                 store_id: Number(newInvoiceData.store_id) || 1,
                 customer_id: newInvoiceData.customer_id !== null && newInvoiceData.customer_id !== '' 
                     ? Number(newInvoiceData.customer_id) 
                     : null,
                 same_state: Boolean(newInvoiceData.same_state),
-                items: newInvoiceData.items.map((it) => ({
-                    product_id: Number(it.product_id) || 1,
-                    quantity: Number(it.quantity) || 1,
-                    unit_price: Number(it.unit_price) || 0,
-                    discount: Number(it.discount) || 0,
-                })),
-                payments: newInvoiceData.payments.map((p) => {
-                    let mode = (p.payment_mode || 'cash').toLowerCase().trim();
-                    if (mode === 'netbanking' || mode === 'net_banking') mode = 'card';
-                    const allowed = ['cash', 'upi', 'card', 'credit_card', 'debit_card', 'wallet', 'qr'];
-                    if (!allowed.includes(mode)) mode = 'cash';
-                    return {
-                        payment_mode: mode,
-                        amount: Number(p.amount) || 0,
-                        transaction_reference: p.transaction_reference ? String(p.transaction_reference).trim() : null,
-                    };
-                }),
+                items: itemsPayload,
+                payments: paymentsPayload,
             };
 
             const created = await createInvoice(payload);
@@ -1005,7 +1078,13 @@ const BillingManagement = () => {
             if (searchFilters.customer_name && !custName.includes(searchFilters.customer_name.toLowerCase())) return false;
             if (searchFilters.mobile && !phone.includes(searchFilters.mobile)) return false;
             if (searchFilters.gstin && !gstin.includes(searchFilters.gstin.toLowerCase())) return false;
-            if (searchFilters.payment_status !== 'All' && status !== searchFilters.payment_status.toLowerCase()) return false;
+            if (searchFilters.payment_status && searchFilters.payment_status.toLowerCase() !== 'all') {
+                const targetStatus = searchFilters.payment_status.toLowerCase();
+                const invPaymentStatus = String(
+                    inv.payment_status || (inv.payments && inv.payments.length > 0 ? 'paid' : (inv.status === 'cancelled' ? 'cancelled' : 'paid'))
+                ).toLowerCase();
+                if (invPaymentStatus !== targetStatus) return false;
+            }
             if (searchFilters.store_id && String(inv.store_id) !== String(searchFilters.store_id)) return false;
 
             return true;
@@ -1043,40 +1122,6 @@ const BillingManagement = () => {
         };
     }, [invoices]);
 
-    // Monthly chart trends from actual invoices
-    const chartTrend = useMemo(() => {
-        const months = [];
-        const now = new Date();
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const key = d.toISOString().slice(0, 7);
-            const label = d.toLocaleString('en-US', { month: 'short' });
-            months.push({ key, month: label, invoices: 0, gst: 0, revenue: 0 });
-        }
-
-        invoices.forEach((inv) => {
-            const dateStr = inv.created_at || inv.date;
-            if (!dateStr) return;
-            const key = String(dateStr).slice(0, 7);
-            const item = months.find((m) => m.key === key);
-            if (item) {
-                item.invoices += 1;
-                const st = String(inv.status || '').toLowerCase();
-                if (st !== 'cancelled' && st !== 'returned') {
-                    const gst = (Number(inv.cgst_amount || 0) + Number(inv.sgst_amount || 0) + Number(inv.igst_amount || 0));
-                    item.gst += gst;
-                    item.revenue += Number(inv.total_amount || 0);
-                }
-            }
-        });
-
-        return months.map((m) => ({
-            ...m,
-            gst: Math.round(m.gst * 100) / 100,
-            revenue: Math.round(m.revenue * 100) / 100,
-        }));
-    }, [invoices]);
-
     // CSV / Report Export
     const handleExportCsv = async () => {
         try {
@@ -1112,7 +1157,7 @@ const BillingManagement = () => {
     };
 
     return (
-        <div className="dash-page">
+        <div className="dash-page dash-page--full">
             {/* Top Alert Toast */}
             {alertMsg && (
                 <div
@@ -1160,22 +1205,35 @@ const BillingManagement = () => {
                 </div>
                 <div className="adm-header-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <button
-                        id="refresh-invoices-btn"
-                        onClick={fetchInvoicesList}
-                        disabled={loadingInvoices}
-                        className="adm-btn-secondary"
-                        title="Reload latest invoices from server"
-                    >
-                        <BsArrowRepeat size={14} className={loadingInvoices ? 'spin' : ''} />
-                        {loadingInvoices ? 'Refreshing…' : 'Refresh'}
-                    </button>
-                    <button
                         id="export-invoices-btn"
                         onClick={handleExportCsv}
                         className="adm-btn-secondary"
                         title="Export current invoice records to CSV"
                     >
                         <BsDownload size={14} /> Export CSV
+                    </button>
+                    <button
+                        id="top-find-by-id-btn"
+                        type="button"
+                        onClick={() => {
+                            if (searchInputRef.current) {
+                                searchInputRef.current.focus();
+                                searchInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }}
+                        className="adm-btn-secondary"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontWeight: 600,
+                            color: '#4f46e5',
+                            borderColor: '#c7d2fe',
+                            background: '#eef2ff',
+                        }}
+                        title="Jump to smart search (Invoice #, Order ID, Customer)"
+                    >
+                        <BsSearch size={13} /> Find by ID
                     </button>
                     <button
                         id="download-invoice-btn"
@@ -1238,7 +1296,7 @@ const BillingManagement = () => {
                     </div>
                     <p className="adm-kpi-label">Total Invoices</p>
                     <p className="adm-kpi-value">{kpiSummary.totalInvoices}</p>
-                    <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0', fontWeight: 500 }}>
+                    <p className="adm-kpi-sub">
                         All tax invoices in system
                     </p>
                 </div>
@@ -1252,7 +1310,7 @@ const BillingManagement = () => {
                     </div>
                     <p className="adm-kpi-label">Paid Invoices</p>
                     <p className="adm-kpi-value" style={{ color: '#10b981' }}>{kpiSummary.paidInvoices}</p>
-                    <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0', fontWeight: 500 }}>
+                    <p className="adm-kpi-sub">
                         Issued &amp; fully settled transactions
                     </p>
                 </div>
@@ -1266,7 +1324,7 @@ const BillingManagement = () => {
                     </div>
                     <p className="adm-kpi-label">Pending Payments</p>
                     <p className="adm-kpi-value" style={{ color: '#d97706' }}>{kpiSummary.pendingPayments}</p>
-                    <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0', fontWeight: 500 }}>
+                    <p className="adm-kpi-sub">
                         Unpaid or partially settled invoices
                     </p>
                 </div>
@@ -1280,7 +1338,7 @@ const BillingManagement = () => {
                     </div>
                     <p className="adm-kpi-label">Total Billed Amount</p>
                     <p className="adm-kpi-value" style={{ color: '#0f172a' }}>{fmt(kpiSummary.totalBilledAmount)}</p>
-                    <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0', fontWeight: 500 }}>
+                    <p className="adm-kpi-sub">
                         Net revenue from valid invoices
                     </p>
                 </div>
@@ -1293,8 +1351,8 @@ const BillingManagement = () => {
                     style={{
                         background: 'linear-gradient(to right, #f8fafc, #eff6ff)',
                         borderColor: '#bfdbfe',
-                        padding: '14px 20px',
-                        marginBottom: 16,
+                        padding: '12px 18px',
+                        marginBottom: 0,
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -1327,113 +1385,74 @@ const BillingManagement = () => {
                 </div>
             )}
 
-            {/* Quick Invoice / Order ID Direct Lookup */}
-            <div className="chart-card" style={{ padding: '14px 20px', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <BsBoxArrowUpRight size={15} color="#4f46e5" />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Direct Invoice or Order ID Lookup</span>
-                    </div>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Fetch invoice record directly by ID</span>
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 260, display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0 12px' }}>
-                        <BsSearch size={13} color="#94a3b8" />
-                        <input
-                            id="quick-lookup-input"
-                            type="text"
-                            placeholder="Enter Invoice ID or Order ID (e.g. 101 or INV-A1B2C3D4)"
-                            value={lookupId}
-                            onChange={(e) => { setLookupId(e.target.value); setLookupError(''); }}
-                            onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
-                            style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', padding: '9px 8px', fontSize: 13, color: '#1e293b' }}
-                        />
-                        {lookupId && (
-                            <button onClick={() => setLookupId('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
-                                <BsX size={16} />
-                            </button>
-                        )}
-                    </div>
-                    <button
-                        id="quick-lookup-btn"
-                        onClick={handleLookup}
-                        disabled={lookupLoading}
-                        className="adm-btn-primary"
-                        style={{ padding: '9px 18px', fontSize: 13 }}
-                    >
-                        {lookupLoading ? 'Fetching…' : 'Fetch Invoice Details'}
-                    </button>
-                </div>
-                {lookupError && (
-                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, color: '#ef4444', fontSize: 12, fontWeight: 500 }}>
-                        <BsExclamationTriangleFill size={12} /> {lookupError}
-                    </div>
-                )}
-            </div>
-
-            {/* Monthly Trend Analytics Charts */}
-            <div className="dash-charts-row" style={{ marginBottom: 16 }}>
-                <div className="chart-card">
-                    <div className="chart-card-header">
-                        <h2 className="chart-title">Monthly Invoice Generation</h2>
-                        <span style={{ fontSize: 11, color: '#9ca3af' }}>Volume of invoices raised</span>
-                    </div>
-                    <ResponsiveContainer width="100%" height={170}>
-                        <BarChart data={chartTrend} margin={{ top: 8, right: 16, bottom: 20, left: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                            <Bar dataKey="invoices" name="Invoices" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={26} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-
-                <div className="chart-card">
-                    <div className="chart-card-header">
-                        <h2 className="chart-title">Monthly GST Collection Trend</h2>
-                        <span style={{ fontSize: 11, color: '#9ca3af' }}>Total GST amount collected (₹)</span>
-                    </div>
-                    <ResponsiveContainer width="100%" height={170}>
-                        <LineChart data={chartTrend} margin={{ top: 8, right: 16, bottom: 20, left: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v) => fmt(v)} />
-                            <Line type="monotone" dataKey="gst" name="GST" stroke="#0ea5e9" strokeWidth={2.5} dot={{ r: 4, fill: '#0ea5e9', strokeWidth: 0 }} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
             {/* =================================================================
                3. SEARCH & FILTERS + INVOICE HISTORY TABLE
                ================================================================= */}
-            <div className="chart-card">
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 {/* Search & Filters Toolbar */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                <div style={{ padding: '10px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                        {/* Search input (debounced) */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 280 }}>
-                            <div className="adm-search-wrap" style={{ flex: 1 }}>
+                        {/* Unified Smart Search: table filtering + direct ID lookup */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 320 }}>
+                            <div className="adm-search-wrap" style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
                                 <BsSearch size={13} className="adm-search-icon" />
                                 <input
+                                    ref={searchInputRef}
                                     id="invoice-search-filter-input"
                                     className="adm-search"
-                                    placeholder="Search by invoice number or customer name…"
+                                    placeholder="Search by invoice #, order ID, or customer name…"
                                     value={searchTerm}
                                     onChange={(e) => {
                                         setSearchTerm(e.target.value);
+                                        if (lookupError) setLookupError('');
                                         setPage(1);
                                     }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && searchTerm.trim()) {
+                                            handleLookup(searchTerm.trim());
+                                        }
+                                    }}
+                                    style={{ paddingRight: searchTerm ? 120 : 100 }}
                                 />
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => { setSearchTerm(''); setPage(1); }}
-                                        style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', paddingRight: 8 }}
-                                    >
-                                        <BsX size={16} />
-                                    </button>
+                                {searchTerm ? (
+                                    <div style={{ position: 'absolute', right: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <button
+                                            type="button"
+                                            id="quick-lookup-btn"
+                                            onClick={() => handleLookup(searchTerm.trim())}
+                                            disabled={lookupLoading}
+                                            className="adm-btn-primary"
+                                            style={{
+                                                padding: '4px 9px',
+                                                fontSize: 11,
+                                                fontWeight: 600,
+                                                borderRadius: 6,
+                                                background: '#4f46e5',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                                cursor: 'pointer',
+                                                boxShadow: 'none',
+                                            }}
+                                            title="Direct Lookup & Open Details (Enter)"
+                                        >
+                                            <BsBoxArrowUpRight size={10} />
+                                            {lookupLoading ? 'Finding…' : 'Quick View'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSearchTerm(''); if (lookupError) setLookupError(''); setPage(1); }}
+                                            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center' }}
+                                            title="Clear search"
+                                        >
+                                            <BsX size={16} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <span style={{ position: 'absolute', right: 10, fontSize: 10, color: '#94a3b8', pointerEvents: 'none', fontWeight: 500, background: '#f8fafc', padding: '2px 6px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                        ↵ Enter to view
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -1448,17 +1467,15 @@ const BillingManagement = () => {
                                     setSearchFilters((prev) => ({ ...prev, payment_status: e.target.value }));
                                     setPage(1);
                                 }}
-                                style={{ minWidth: 140 }}
+                                style={{ minWidth: 150 }}
                             >
-                                <option value="All">All Statuses</option>
-                                <option value="issued">Issued</option>
+                                <option value="All">All Payment Statuses</option>
                                 <option value="paid">Paid</option>
                                 <option value="pending">Pending</option>
                                 <option value="unpaid">Unpaid</option>
                                 <option value="partial">Partial</option>
                                 <option value="completed">Completed</option>
                                 <option value="cancelled">Cancelled</option>
-                                <option value="returned">Returned</option>
                                 <option value="failed">Failed</option>
                             </select>
 
@@ -1540,6 +1557,19 @@ const BillingManagement = () => {
                         </div>
                     </div>
 
+                    {/* Inline Direct ID Lookup Notification / Error */}
+                    {lookupError && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 12, fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <BsExclamationTriangleFill size={13} color="#ef4444" />
+                                <span>{lookupError}</span>
+                            </div>
+                            <button onClick={() => setLookupError('')} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                                <BsX size={16} />
+                            </button>
+                        </div>
+                    )}
+
                     {/* Expandable Advanced Filters (Customer Mobile, GSTIN, Date From, Date To) */}
                     {showAdvancedFilters && (
                         <div
@@ -1611,12 +1641,14 @@ const BillingManagement = () => {
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
 
                 {/* Fetch Error Banner with Retry */}
                 {fetchError && (
                     <div
                         style={{
+                            margin: '10px 16px 0',
                             background: '#fef2f2',
                             border: '1px solid #fecaca',
                             borderRadius: 8,
@@ -1626,7 +1658,6 @@ const BillingManagement = () => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            marginBottom: 14,
                         }}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1645,23 +1676,21 @@ const BillingManagement = () => {
 
                 {/* Invoice History Table */}
                 <div style={{ overflowX: 'auto' }}>
-                    <table className="dash-table" style={{ marginTop: 0, width: '100%' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                         <thead>
-                            <tr>
-                                <th style={{ width: 44, textAlign: 'center' }}>
-                                    <span style={{ fontSize: 11, color: '#64748b' }}>Select</span>
-                                </th>
-                                <th>Invoice Number</th>
-                                <th>Customer Name</th>
-                                <th>Invoice Date</th>
-                                <th>Store</th>
-                                <th>Taxable Amount</th>
-                                <th>CGST</th>
-                                <th>SGST</th>
-                                <th>IGST</th>
-                                <th>Grand Total</th>
-                                <th>Payment Status</th>
-                                <th style={{ textAlign: 'center', minWidth: 230 }}>Available Actions</th>
+                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <th style={{ padding: '9px 8px', width: 55, textAlign: 'center' }}>Sr. No.</th>
+                                <th style={{ padding: '9px 14px' }}>Invoice Number</th>
+                                <th style={{ padding: '9px 14px' }}>Customer Name</th>
+                                <th style={{ padding: '9px 14px' }}>Invoice Date</th>
+                                <th style={{ padding: '9px 14px' }}>Store</th>
+                                <th style={{ padding: '9px 14px' }}>Taxable Amount</th>
+                                <th style={{ padding: '9px 14px' }}>CGST</th>
+                                <th style={{ padding: '9px 14px' }}>SGST</th>
+                                <th style={{ padding: '9px 14px' }}>IGST</th>
+                                <th style={{ padding: '9px 14px' }}>Grand Total</th>
+                                <th style={{ padding: '9px 14px' }}>Payment Status</th>
+                                <th style={{ padding: '9px 14px', textAlign: 'center' }}>Available Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1706,30 +1735,27 @@ const BillingManagement = () => {
                                     const sgst = Number(inv.sgst_amount || 0);
                                     const igst = Number(inv.igst_amount || 0);
                                     const isSelected = String(selectedTableInvoiceId) === String(invId);
+                                    const serialNumber = (page - 1) * pageSize + idx + 1;
 
                                     return (
                                         <tr 
                                             key={inv.id || idx}
+                                            className="table-row-hover"
                                             style={{
-                                                background: isSelected ? '#f5f3ff' : undefined,
+                                                borderBottom: '1px solid #f3f4f6',
+                                                background: isSelected ? '#f5f3ff' : 'transparent',
                                                 transition: 'background-color 0.15s ease',
                                             }}
+                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f9fafb'; }}
+                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                                         >
-                                            {/* Row Radio Selection */}
-                                            <td style={{ textAlign: 'center' }}>
-                                                <input
-                                                    type="radio"
-                                                    name="selected_invoice_row"
-                                                    checked={isSelected}
-                                                    onChange={() => setSelectedTableInvoiceId(prev => String(prev) === String(invId) ? null : invId)}
-                                                    onClick={() => setSelectedTableInvoiceId(prev => String(prev) === String(invId) ? null : invId)}
-                                                    style={{ cursor: 'pointer', accentColor: '#4f46e5', width: 16, height: 16 }}
-                                                    title="Select this invoice to download or preview"
-                                                />
+                                            {/* Sr. No. */}
+                                            <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                                {serialNumber}
                                             </td>
 
                                             {/* Invoice Number */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                     <span style={{ fontWeight: 700, color: '#4f46e5', fontSize: 13 }}>
                                                         {invNumber}
@@ -1741,7 +1767,7 @@ const BillingManagement = () => {
                                             </td>
 
                                             {/* Customer Name */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                     <span style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>
                                                         {inv.customer_name || inv.customer || 'Walk-in Customer'}
@@ -1753,163 +1779,373 @@ const BillingManagement = () => {
                                             </td>
 
                                             {/* Invoice Date */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <span style={{ fontSize: 12, color: '#475569', whiteSpace: 'nowrap' }}>
                                                     {dateStr}
                                                 </span>
                                             </td>
 
                                             {/* Store */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <span className="dash-badge" style={{ background: '#f1f5f9', color: '#475569', fontSize: 11, fontWeight: 600 }}>
                                                     Store #{inv.store_id || 1}
                                                 </span>
                                             </td>
 
                                             {/* Taxable Amount */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <span style={{ fontWeight: 600, color: '#1e293b' }}>
                                                     {fmt(inv.subtotal)}
                                                 </span>
                                             </td>
 
                                             {/* CGST */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <span style={{ fontWeight: 500, color: '#0ea5e9', fontSize: 12 }}>
                                                     {fmt(cgst)}
                                                 </span>
                                             </td>
 
                                             {/* SGST */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <span style={{ fontWeight: 500, color: '#0ea5e9', fontSize: 12 }}>
                                                     {fmt(sgst)}
                                                 </span>
                                             </td>
 
                                             {/* IGST */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <span style={{ fontWeight: 500, color: '#f59e0b', fontSize: 12 }}>
                                                     {fmt(igst)}
                                                 </span>
                                             </td>
 
                                             {/* Grand Total */}
-                                            <td>
+                                            <td style={{ padding: '9px 14px' }}>
                                                 <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
                                                     {fmt(inv.total_amount)}
                                                 </span>
                                             </td>
 
                                             {/* Payment Status */}
-                                            <td>{getStatusBadge(inv.status)}</td>
+                                            <td style={{ padding: '9px 14px' }}>
+                                                {getStatusBadge(
+                                                    inv.payment_status || (inv.payments && inv.payments.length > 0 ? 'paid' : (inv.status === 'cancelled' ? 'cancelled' : 'paid'))
+                                                )}
+                                            </td>
 
                                             {/* Available Actions */}
-                                            <td style={{ textAlign: 'center' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-                                                    {/* 1. View Invoice Details */}
+                                            <td style={{ padding: '9px 14px', textAlign: 'center', position: 'relative' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}>
+                                                    {/* 1. Quick Action: View Invoice Details (GET /invoices/{id}) */}
                                                     <button
                                                         id={`btn-view-${invId}`}
+                                                        type="button"
                                                         onClick={() => handleOpenDetail(inv)}
-                                                        className="adm-action-btn"
-                                                        title="Retrieve Complete Details"
-                                                        style={{ background: '#eef2ff', color: '#4f46e5' }}
+                                                        title="View Invoice Details"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#4f46e5',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease',
+                                                        }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                     >
                                                         <BsEyeFill size={13} />
                                                     </button>
 
-                                                    {/* 2. Preview & Print Invoice (Requirement 2) */}
+                                                    {/* 2. Quick Action: Preview & Print Invoice (GET /invoices/{id}/pdf) */}
                                                     <button
                                                         id={`btn-preview-print-${invId}`}
+                                                        type="button"
                                                         onClick={() => openPdfPreviewModal(inv, 'invoice')}
-                                                        className="adm-action-btn"
                                                         title="Preview & Print Invoice"
-                                                        style={{ background: '#eff6ff', color: '#2563eb' }}
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#2563eb',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease',
+                                                        }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                     >
                                                         <BsPrinter size={13} />
                                                     </button>
 
-                                                    {/* 3. Download Tax Invoice PDF */}
+                                                    {/* 3. Quick Action: Send via WhatsApp (POST /invoices/{id}/whatsapp) */}
                                                     <button
-                                                        id={`btn-download-pdf-${invId}`}
-                                                        onClick={() => handleDownload(invId, 'invoice', invNumber)}
-                                                        disabled={downloadingId === invId}
-                                                        className="adm-action-btn"
-                                                        title="Download Tax Invoice PDF"
-                                                        style={{ background: '#ecfdf5', color: '#059669' }}
+                                                        id={`btn-whatsapp-${invId}`}
+                                                        type="button"
+                                                        onClick={() => handleOpenWhatsAppModal(inv)}
+                                                        title="Send Invoice via WhatsApp"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#059669',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease',
+                                                        }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                     >
-                                                        {downloadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsFileEarmarkPdf size={13} />}
+                                                        <BsWhatsapp size={13} />
                                                     </button>
 
-                                                    {/* 4. Download POS Bill */}
-                                                    <button
-                                                        id={`btn-download-bill-${invId}`}
-                                                        onClick={() => handleDownload(invId, 'bill', invNumber)}
-                                                        disabled={downloadingId === invId}
-                                                        className="adm-action-btn"
-                                                        title="Download Compact POS Bill"
-                                                        style={{ background: '#f0fdf4', color: '#16a34a' }}
-                                                    >
-                                                        <BsReceiptCutoff size={13} />
-                                                    </button>
-
-                                                    {/* 5. Thermal Receipt Slip (80mm ESC/POS) & Reprint (Requirement 7) */}
-                                                    <button
-                                                        id={`btn-thermal-${invId}`}
-                                                        onClick={() => openThermalModal(inv)}
-                                                        className="adm-action-btn"
-                                                        title="Export 80mm ESC/POS Thermal Receipt & Reprint"
-                                                        style={{ background: '#fffbeb', color: '#d97706' }}
-                                                    >
-                                                        <BsSliders size={13} />
-                                                    </button>
-
-                                                    {/* 6. Generate Async (Requirement 7 & 2) */}
-                                                    <button
-                                                        id={`btn-async-${invId}`}
-                                                        onClick={() => handleGenerateAsync(invId)}
-                                                        disabled={asyncLoadingId === invId}
-                                                        className="adm-action-btn"
-                                                        title="Submit Async Generation"
-                                                        style={{ background: '#f1f5f9', color: '#475569' }}
-                                                    >
-                                                        {asyncLoadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsLightningChargeFill size={12} />}
-                                                    </button>
-
-                                                    {/* 7. Create Return / RMA */}
-                                                    <button
-                                                        id={`btn-return-${invId}`}
-                                                        onClick={() => navigate(`/billing/returns?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=return`)}
-                                                        className="adm-action-btn"
-                                                        title="Create Return / Refund Request for this invoice"
-                                                        style={{ background: '#fef3c7', color: '#b45309' }}
-                                                    >
-                                                        <BsArrowReturnLeft size={13} />
-                                                    </button>
-
-                                                    {/* 8. Issue Credit Note */}
-                                                    <button
-                                                        id={`btn-creditnote-${invId}`}
-                                                        onClick={() => navigate(`/billing/credit-notes?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=credit_note`)}
-                                                        className="adm-action-btn"
-                                                        title="Issue Credit Note against this invoice"
-                                                        style={{ background: '#f3e8ff', color: '#7e22ce' }}
-                                                    >
-                                                        <BsReceiptCutoff size={13} />
-                                                    </button>
-
-                                                    {/* 9. Void / Cancel Invoice (Requirement 8) */}
-                                                    {inv.status !== 'cancelled' && inv.status !== 'void' && (
+                                                    {/* 4. More Actions Dropdown Menu (Three Dots) */}
+                                                    <div className="action-dropdown-wrap" style={{ position: 'relative', display: 'inline-block' }}>
                                                         <button
-                                                            id={`btn-void-${invId}`}
-                                                            onClick={() => openVoidModal(inv)}
-                                                            className="adm-action-btn"
-                                                            title="Void / Cancel Tax Invoice"
-                                                            style={{ background: '#fef2f2', color: '#dc2626' }}
+                                                            id={`btn-more-${invId}`}
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setOpenActionMenuId(openActionMenuId === invId ? null : invId);
+                                                            }}
+                                                            title="More Actions"
+                                                            style={{
+                                                                width: 28,
+                                                                height: 28,
+                                                                borderRadius: 6,
+                                                                border: '1px solid #e5e7eb',
+                                                                background: openActionMenuId === invId ? '#f1f5f9' : '#ffffff',
+                                                                color: '#475569',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.15s ease',
+                                                            }}
+                                                            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.background = openActionMenuId === invId ? '#f1f5f9' : '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                         >
-                                                            <BsTrash size={13} />
+                                                            <BsThreeDotsVertical size={13} />
                                                         </button>
-                                                    )}
+
+                                                        {openActionMenuId === invId && (
+                                                            <div
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    right: 0,
+                                                                    top: 'calc(100% + 6px)',
+                                                                    zIndex: 1050,
+                                                                    background: '#ffffff',
+                                                                    borderRadius: 10,
+                                                                    border: '1px solid #e2e8f0',
+                                                                    boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.15), 0 4px 10px -2px rgba(0, 0, 0, 0.05)',
+                                                                    minWidth: 230,
+                                                                    padding: '6px 0',
+                                                                    textAlign: 'left',
+                                                                }}
+                                                            >
+                                                                <div style={{ padding: '6px 14px', fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                                                    Documents &amp; Prints
+                                                                </div>
+
+                                                                <button
+                                                                    id={`btn-download-pdf-${invId}`}
+                                                                    onClick={() => { setOpenActionMenuId(null); handleDownload(invId, 'invoice', invNumber); }}
+                                                                    disabled={downloadingId === invId}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 10,
+                                                                        padding: '8px 14px',
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        fontSize: 12,
+                                                                        color: '#334155',
+                                                                        cursor: 'pointer',
+                                                                        textAlign: 'left',
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                                                >
+                                                                    <BsFileEarmarkPdf size={14} color="#059669" />
+                                                                    <span>Download Tax Invoice (PDF)</span>
+                                                                </button>
+
+                                                                <button
+                                                                    id={`btn-download-bill-${invId}`}
+                                                                    onClick={() => { setOpenActionMenuId(null); handleDownload(invId, 'bill', invNumber); }}
+                                                                    disabled={downloadingId === invId}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 10,
+                                                                        padding: '8px 14px',
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        fontSize: 12,
+                                                                        color: '#334155',
+                                                                        cursor: 'pointer',
+                                                                        textAlign: 'left',
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                                                >
+                                                                    <BsReceiptCutoff size={14} color="#16a34a" />
+                                                                    <span>Download POS Bill</span>
+                                                                </button>
+
+                                                                <button
+                                                                    id={`btn-thermal-${invId}`}
+                                                                    onClick={() => { setOpenActionMenuId(null); openThermalModal(inv); }}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 10,
+                                                                        padding: '8px 14px',
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        fontSize: 12,
+                                                                        color: '#334155',
+                                                                        cursor: 'pointer',
+                                                                        textAlign: 'left',
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                                                >
+                                                                    <BsSliders size={14} color="#d97706" />
+                                                                    <span>Thermal Receipt Slip (80mm)</span>
+                                                                </button>
+
+                                                                <button
+                                                                    id={`btn-async-${invId}`}
+                                                                    onClick={() => { setOpenActionMenuId(null); handleGenerateAsync(invId); }}
+                                                                    disabled={asyncLoadingId === invId}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 10,
+                                                                        padding: '8px 14px',
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        fontSize: 12,
+                                                                        color: '#334155',
+                                                                        cursor: 'pointer',
+                                                                        textAlign: 'left',
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                                                >
+                                                                    <BsLightningChargeFill size={14} color="#6366f1" />
+                                                                    <span>Generate Async Task</span>
+                                                                </button>
+
+                                                                <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
+
+                                                                <div style={{ padding: '6px 14px', fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                                                    Adjustments
+                                                                </div>
+
+                                                                <button
+                                                                    id={`btn-return-${invId}`}
+                                                                    onClick={() => {
+                                                                        setOpenActionMenuId(null);
+                                                                        navigate(`/billing/returns?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=return`);
+                                                                    }}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 10,
+                                                                        padding: '8px 14px',
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        fontSize: 12,
+                                                                        color: '#b45309',
+                                                                        cursor: 'pointer',
+                                                                        textAlign: 'left',
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.background = '#fffbeb'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                                                >
+                                                                    <BsArrowReturnLeft size={14} color="#b45309" />
+                                                                    <span>Create Return / RMA</span>
+                                                                </button>
+
+                                                                <button
+                                                                    id={`btn-creditnote-${invId}`}
+                                                                    onClick={() => {
+                                                                        setOpenActionMenuId(null);
+                                                                        navigate(`/billing/credit-notes?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=credit_note`);
+                                                                    }}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 10,
+                                                                        padding: '8px 14px',
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        fontSize: 12,
+                                                                        color: '#7e22ce',
+                                                                        cursor: 'pointer',
+                                                                        textAlign: 'left',
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.background = '#faf5ff'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                                                >
+                                                                    <BsReceiptCutoff size={14} color="#7e22ce" />
+                                                                    <span>Issue Credit Note</span>
+                                                                </button>
+
+                                                                {inv.status !== 'cancelled' && inv.status !== 'void' && (
+                                                                    <>
+                                                                        <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
+                                                                        <button
+                                                                            id={`btn-void-${invId}`}
+                                                                            onClick={() => { setOpenActionMenuId(null); openVoidModal(inv); }}
+                                                                            style={{
+                                                                                width: '100%',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: 10,
+                                                                                padding: '8px 14px',
+                                                                                background: 'none',
+                                                                                border: 'none',
+                                                                                fontSize: 12,
+                                                                                color: '#dc2626',
+                                                                                cursor: 'pointer',
+                                                                                textAlign: 'left',
+                                                                                fontWeight: 600,
+                                                                            }}
+                                                                            onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+                                                                            onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                                                        >
+                                                                            <BsTrash size={14} color="#dc2626" />
+                                                                            <span>Void / Cancel Invoice</span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -1921,26 +2157,87 @@ const BillingManagement = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                <div className="adm-pagination" style={{ marginTop: 16 }}>
-                    <p className="adm-pagination-info">
-                        Showing {filteredInvoices.length === 0 ? 0 : (page - 1) * perPage + 1}–{Math.min(page * perPage, filteredInvoices.length)} of {filteredInvoices.length} invoices
+                <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 10 }}>
+                    <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                        Showing <strong>{filteredInvoices.length > 0 ? (page - 1) * pageSize + 1 : 0}</strong> to <strong>{Math.min(page * pageSize, filteredInvoices.length)}</strong> of <strong>{filteredInvoices.length}</strong> invoices
                     </p>
-                    <div className="adm-pagination-btns">
-                        <button className="adm-pg-btn" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-                            ‹ Prev
-                        </button>
-                        {Array.from({ length: totalPages }, (_, i) => (
-                            <button
-                                key={i}
-                                className={`adm-pg-btn ${page === i + 1 ? 'adm-pg-btn--active' : ''}`}
-                                onClick={() => setPage(i + 1)}
+
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        {/* Entries per Page Dropdown */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                            <select
+                                className="ec-input"
+                                value={pageSize}
+                                onChange={e => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                style={{
+                                    height: 32,
+                                    fontSize: 12,
+                                    padding: '0 8px',
+                                    borderRadius: 6,
+                                    background: '#ffffff',
+                                    border: '1px solid #d1d5db',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                }}
                             >
-                                {i + 1}
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+
+                        {/* Navigation Controls: Arrows only */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                disabled={page === 1}
+                                onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                                title="Previous Page"
+                                aria-label="Previous Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronLeft size={14} />
                             </button>
-                        ))}
-                        <button className="adm-pg-btn" disabled={page === totalPages || filteredInvoices.length === 0} onClick={() => setPage((p) => p + 1)}>
-                            Next ›
-                        </button>
+
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                Page {page} of {totalPages || 1}
+                            </span>
+
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                                title="Next Page"
+                                aria-label="Next Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronRight size={14} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2481,12 +2778,12 @@ const BillingManagement = () => {
                                 </div>
                                 <div>
                                     <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        {newInvoiceData.same_state ? 'CGST + SGST (18%)' : 'IGST (18%)'}
+                                        {newInvoiceData.same_state ? 'CGST + SGST (18% incl.)' : 'IGST (18% incl.)'}
                                     </span>
                                     <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: 13, color: '#8b5cf6' }}>₹{createTotals.totalTax.toFixed(2)}</p>
                                 </div>
                                 <div>
-                                    <span style={{ fontSize: 11, color: '#64748b' }}>Estimated Grand Total</span>
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>Order Total / Payable</span>
                                     <p style={{ margin: '2px 0 0', fontWeight: 800, fontSize: 15, color: '#4f46e5' }}>₹{createTotals.grandTotal.toFixed(2)}</p>
                                 </div>
                                 <div>
@@ -2677,6 +2974,41 @@ const BillingManagement = () => {
                                         </div>
                                     </div>
 
+                                    {/* Invoice Line Items (Requirement 3: Data Accuracy) */}
+                                    {Array.isArray(selectedInvoice.items) && selectedInvoice.items.length > 0 && (
+                                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                                            <div style={{ padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 700, fontSize: 12, color: '#475569' }}>
+                                                Billed Products &amp; Services ({selectedInvoice.items.length})
+                                            </div>
+                                            <div style={{ overflowX: 'auto' }}>
+                                                <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', textAlign: 'left' }}>
+                                                    <thead>
+                                                        <tr style={{ background: '#f1f5f9', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
+                                                            <th style={{ padding: '6px 10px' }}>Item</th>
+                                                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Qty</th>
+                                                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Price</th>
+                                                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Discount</th>
+                                                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {selectedInvoice.items.map((it, idx) => (
+                                                            <tr key={it.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                                <td style={{ padding: '6px 10px', fontWeight: 600 }}>{it.product_name || `Item #${it.product_id}`}</td>
+                                                                <td style={{ padding: '6px 10px', textAlign: 'right' }}>{it.quantity}</td>
+                                                                <td style={{ padding: '6px 10px', textAlign: 'right' }}>{fmt(it.unit_price)}</td>
+                                                                <td style={{ padding: '6px 10px', textAlign: 'right', color: Number(it.discount) > 0 ? '#ef4444' : '#94a3b8' }}>
+                                                                    {Number(it.discount) > 0 ? `-${fmt(it.discount)}` : '—'}
+                                                                </td>
+                                                                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700 }}>{fmt(it.total_price || (it.quantity * it.unit_price - (it.discount || 0)))}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Metadata Details */}
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
                                         <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
@@ -2690,6 +3022,42 @@ const BillingManagement = () => {
                                             <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b' }}>Invoice ID: #{selectedInvoice.id}</p>
                                         </div>
                                     </div>
+
+                                    {/* Payment Details Section */}
+                                    {(() => {
+                                        const pMode = selectedInvoice.payment_mode || selectedInvoice.payments?.[0]?.payment_mode || 'Cash';
+                                        const pStatus = selectedInvoice.payment_status || (selectedInvoice.status === 'issued' ? 'Paid' : 'Paid');
+                                        const tVal = selectedInvoice.cashTendered ?? selectedInvoice.payments?.[0]?.amount_tendered ?? null;
+                                        const cVal = selectedInvoice.changeDue ?? selectedInvoice.payments?.[0]?.change_due ?? null;
+                                        return (
+                                            <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, fontSize: 13 }}>
+                                                <div>
+                                                    <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Payment Mode</span>
+                                                    <p style={{ margin: '3px 0 0', fontWeight: 700, textTransform: 'capitalize' }}>{pMode}</p>
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Payment Status</span>
+                                                    <p style={{ margin: '3px 0 0', fontWeight: 800, color: '#059669' }}>{pStatus}</p>
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Total Payable</span>
+                                                    <p style={{ margin: '3px 0 0', fontWeight: 700 }}>{fmt(selectedInvoice.total_amount || selectedInvoice.total)}</p>
+                                                </div>
+                                                {tVal != null && (
+                                                    <div>
+                                                        <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Cash Received</span>
+                                                        <p style={{ margin: '3px 0 0', fontWeight: 700, color: '#2563eb' }}>{fmt(tVal)}</p>
+                                                    </div>
+                                                )}
+                                                {cVal != null && Number(cVal) > 0 && (
+                                                    <div>
+                                                        <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Change Returned</span>
+                                                        <p style={{ margin: '3px 0 0', fontWeight: 700, color: '#059669' }}>{fmt(cVal)}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Action Buttons inside Details */}
                                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #e2e8f0' }}>
@@ -2753,6 +3121,13 @@ const BillingManagement = () => {
                                                 <BsTrash size={12} /> Void Invoice
                                             </button>
                                         )}
+                                        <button
+                                            onClick={() => handleOpenWhatsAppModal(selectedInvoice)}
+                                            className="adm-btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#f0fdf4', color: '#16a34a', borderColor: '#86efac' }}
+                                        >
+                                            <BsWhatsapp size={13} /> Send via WhatsApp
+                                        </button>
                                     </div>
                                 </div>
                             ) : (
@@ -2908,6 +3283,107 @@ const BillingManagement = () => {
                             >
                                 {voidLoading && <BsArrowRepeat size={13} className="spin" />}
                                 Confirm Void & Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* =================================================================
+               MODAL: SEND INVOICE VIA WHATSAPP (POST /api/v1/invoices/{id}/whatsapp)
+               ================================================================= */}
+            {showWhatsAppModal && whatsAppInvoice && (
+                <div
+                    className="modal-backdrop"
+                    onClick={() => setShowWhatsAppModal(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, 0.65)',
+                        zIndex: 2200,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 16,
+                        backdropFilter: 'blur(3px)',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 440,
+                            padding: 24,
+                            boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                            <div style={{ background: '#ecfdf5', color: '#16a34a', padding: 10, borderRadius: 10 }}>
+                                <BsWhatsapp size={22} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+                                    Send Invoice via WhatsApp
+                                </h3>
+                                <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                                    Invoice #{whatsAppInvoice.invoice_number || whatsAppInvoice.id}
+                                </p>
+                            </div>
+                        </div>
+
+                        <p style={{ fontSize: 13, color: '#475569', marginBottom: 14, lineHeight: 1.5 }}>
+                            Dispatch official Tax Invoice PDF and transaction receipt link directly to the customer's WhatsApp mobile number.
+                        </p>
+
+                        <div style={{ marginBottom: 20 }}>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                WhatsApp Mobile Number <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <input
+                                type="tel"
+                                className="adm-input"
+                                placeholder="e.g. 9876543210 (10 digits)"
+                                value={whatsAppPhone}
+                                onChange={(e) => setWhatsAppPhone(e.target.value)}
+                                style={{ width: '100%', boxSizing: 'border-box' }}
+                            />
+                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>
+                                Will send message with PDF download link to registered recipient
+                            </span>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={() => setShowWhatsAppModal(false)}
+                                disabled={whatsAppLoading}
+                                style={{ padding: '8px 16px', fontSize: 13 }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSendWhatsAppSubmit}
+                                disabled={whatsAppLoading}
+                                style={{
+                                    padding: '9px 20px',
+                                    borderRadius: 8,
+                                    border: 'none',
+                                    background: '#16a34a',
+                                    color: '#fff',
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                }}
+                            >
+                                {whatsAppLoading && <BsArrowRepeat size={13} className="spin" />}
+                                Send via WhatsApp
                             </button>
                         </div>
                     </div>

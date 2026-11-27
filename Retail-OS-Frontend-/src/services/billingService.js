@@ -101,12 +101,16 @@ export const addCartItem = async ({ product_id, quantity, unit_price, discount =
             quantity: Number(quantity),
             unit_price: unit_price != null ? Number(unit_price) : null,
             discount: Number(discount || 0),
-            store_id: Number(activeStoreId),
-            same_state: Boolean(same_state),
         };
         const response = await apiClient.post(
-            `/billing/cart/add-item?store_id=${activeStoreId}&same_state=true`,
-            payload
+            '/billing/cart/add-item',
+            payload,
+            {
+                params: {
+                    store_id: Number(activeStoreId),
+                    same_state: Boolean(same_state),
+                }
+            }
         );
         return response.data;
     } catch (e) { handleApiError(e); }
@@ -474,6 +478,161 @@ export const getInvoices = async (params = {}) => {
             cleanParams.store_id = getActiveStoreId();
         }
         const response = await apiClient.get('/invoices', { params: cleanParams });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Clear all items from active cart.
+ * DELETE /api/v1/billing/cart/clear
+ */
+export const clearCart = async (store_id = null) => {
+    const activeStoreId = store_id || getActiveStoreId();
+    try {
+        const response = await apiClient.delete('/billing/cart/clear', {
+            params: { store_id: Number(activeStoreId) }
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Scan barcode and add directly to active server cart.
+ * POST /api/v1/billing/cart/scan
+ */
+export const scanCartItem = async ({ barcode, quantity = 1, store_id = null, same_state = true }) => {
+    const activeStoreId = store_id || getActiveStoreId();
+    try {
+        const payload = {
+            barcode: String(barcode).trim(),
+            quantity: Number(quantity) || 1,
+        };
+        const response = await apiClient.post('/billing/cart/scan', payload, {
+            params: {
+                store_id: Number(activeStoreId),
+                same_state: Boolean(same_state),
+            }
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Attach customer to the active server cart.
+ * POST /api/v1/billing/cart/customer
+ */
+export const setCartCustomer = async ({ customer_id, store_id = null }) => {
+    const activeStoreId = store_id || getActiveStoreId();
+    try {
+        const response = await apiClient.post('/billing/cart/customer', {
+            customer_id: Number(customer_id)
+        }, {
+            params: { store_id: Number(activeStoreId) }
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Remove customer from the active server cart.
+ * DELETE /api/v1/billing/cart/customer
+ */
+export const removeCartCustomer = async (store_id = null) => {
+    const activeStoreId = store_id || getActiveStoreId();
+    try {
+        const response = await apiClient.delete('/billing/cart/customer', {
+            params: { store_id: Number(activeStoreId) }
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Validate stock availability for all items in the active cart.
+ * GET /api/v1/billing/cart/validate-stock
+ */
+export const validateCartStock = async (store_id = null) => {
+    const activeStoreId = store_id || getActiveStoreId();
+    try {
+        const response = await apiClient.get('/billing/cart/validate-stock', {
+            params: { store_id: Number(activeStoreId) }
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Fetch specific held cart details.
+ * GET /api/v1/billing/cart/held/{hold_id}
+ */
+export const getHeldCartById = async (holdId) => {
+    try {
+        const response = await apiClient.get(`/billing/cart/held/${encodeURIComponent(holdId)}`);
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Discard / cancel a held cart.
+ * DELETE /api/v1/billing/cart/held/{hold_id}
+ */
+export const cancelHeldCart = async (holdId) => {
+    try {
+        const response = await apiClient.delete(`/billing/cart/held/${encodeURIComponent(holdId)}`);
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Checkout cart through the billing engine.
+ * POST /api/v1/billing/checkout
+ */
+export const billingCheckout = async (payload) => {
+    try {
+        const response = await apiClient.post('/billing/checkout', payload);
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Process item return at billing counter.
+ * POST /api/v1/billing/returns
+ */
+export const processBillingReturn = async (payload) => {
+    try {
+        const response = await apiClient.post('/billing/returns', payload);
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Process voice text transcript command.
+ * POST /api/v1/billing/voice-command
+ */
+export const processVoiceCommand = async ({ command, store_id = null }) => {
+    const activeStoreId = store_id || getActiveStoreId();
+    try {
+        const response = await apiClient.post('/billing/voice-command', {
+            command: String(command).trim(),
+            store_id: Number(activeStoreId),
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Upload microphone audio for voice-assisted POS billing.
+ * POST /api/v1/billing/voice-command/audio
+ */
+export const processVoiceAudio = async (audioBlob, store_id = null) => {
+    const activeStoreId = store_id || getActiveStoreId();
+    try {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'voice_command.wav');
+        if (activeStoreId) formData.append('store_id', String(activeStoreId));
+        const response = await apiClient.post('/billing/voice-command/audio', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     } catch (e) { handleApiError(e); }
 };

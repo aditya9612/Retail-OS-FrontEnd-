@@ -23,6 +23,8 @@ import {
     BsArrowRepeat,
     BsShieldCheck,
     BsReceipt,
+    BsChevronLeft,
+    BsChevronRight,
 } from 'react-icons/bs';
 import {
     getOrderReturns,
@@ -172,6 +174,10 @@ export const ReturnsRefundsPage = () => {
     // ── Search & Filter States ────────────────────────────────────────────────
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [pageReturns, setPageReturns] = useState(1);
+    const [pageSizeReturns, setPageSizeReturns] = useState(10);
+    const [pageRefunds, setPageRefunds] = useState(1);
+    const [pageSizeRefunds, setPageSizeRefunds] = useState(10);
 
     // ── Toast Alerts ──────────────────────────────────────────────────────────
     const [toast, setToast] = useState(null);
@@ -382,6 +388,12 @@ export const ReturnsRefundsPage = () => {
         }
         return list;
     }, [refundsList, statusFilter, search]);
+
+    const totalPagesReturns = Math.max(1, Math.ceil(filteredReturns.length / pageSizeReturns));
+    const paginatedReturns = filteredReturns.slice((pageReturns - 1) * pageSizeReturns, pageReturns * pageSizeReturns);
+
+    const totalPagesRefunds = Math.max(1, Math.ceil(filteredRefunds.length / pageSizeRefunds));
+    const paginatedRefunds = filteredRefunds.slice((pageRefunds - 1) * pageSizeRefunds, pageRefunds * pageSizeRefunds);
 
     // ── Manager Actions Handlers ──────────────────────────────────────────────
     const handleApproveReturn = async (returnId) => {
@@ -757,7 +769,7 @@ export const ReturnsRefundsPage = () => {
     };
 
     return (
-        <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <div className="dash-page dash-page--full">
             {/* ── Toast Alert ──────────────────────────────────────────────────── */}
             {toast && (
                 <div style={{
@@ -783,7 +795,7 @@ export const ReturnsRefundsPage = () => {
             )}
 
             {/* ── Page Header ──────────────────────────────────────────────────── */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 0, paddingBottom: 14, borderBottom: '1px solid #e5e7eb' }}>
                 <div>
                     <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <span style={{ background: '#eef2ff', color: '#6366f1', padding: '8px 12px', borderRadius: 10, display: 'inline-flex' }}>
@@ -805,26 +817,6 @@ export const ReturnsRefundsPage = () => {
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
-                    <button
-                        onClick={fetchData}
-                        disabled={loading}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '10px 16px',
-                            background: '#fff',
-                            border: '1px solid #d1d5db',
-                            borderRadius: 8,
-                            fontSize: 13.5,
-                            fontWeight: 600,
-                            color: '#374151',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <BsArrowClockwise size={16} className={loading ? 'spin' : ''} />
-                        Refresh
-                    </button>
                     <button
                         onClick={() => setShowCreateModal(true)}
                         style={{
@@ -849,51 +841,57 @@ export const ReturnsRefundsPage = () => {
             </div>
 
             {/* ── Top KPI StatCards ────────────────────────────────────────────── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 28 }}>
-                <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>Total Return Requests</span>
-                        <span style={{ background: '#eef2ff', color: '#6366f1', padding: 8, borderRadius: 8 }}><BsArrowReturnLeft size={16} /></span>
+            <div className="adm-kpi-grid">
+                <div className="adm-kpi-card">
+                    <div className="adm-kpi-top">
+                        <div className="adm-kpi-icon" style={{ background: '#eef2ff', color: '#6366f1' }}>
+                            <BsArrowReturnLeft size={18} />
+                        </div>
                     </div>
-                    <p style={{ fontSize: 24, fontWeight: 700, color: '#111827', margin: '10px 0 4px' }}>
-                        {stats.total_returns}
-                    </p>
-                    <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}>
+                    <p className="adm-kpi-label">Total Return Requests</p>
+                    <p className="adm-kpi-value">{stats.total_returns}</p>
+                    <p className="adm-kpi-sub">
                         ₹{Number(stats.total_refund_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Total Value
-                    </span>
+                    </p>
                 </div>
 
-                <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>Pending Approval</span>
-                        <span style={{ background: '#fef3c7', color: '#d97706', padding: 8, borderRadius: 8 }}><BsExclamationCircleFill size={16} /></span>
+                <div className="adm-kpi-card">
+                    <div className="adm-kpi-top">
+                        <div className="adm-kpi-icon" style={{ background: '#fffbeb', color: '#d97706' }}>
+                            <BsExclamationCircleFill size={18} />
+                        </div>
                     </div>
-                    <p style={{ fontSize: 24, fontWeight: 700, color: '#d97706', margin: '10px 0 4px' }}>
-                        {stats.requested_count}
+                    <p className="adm-kpi-label">Pending Approval</p>
+                    <p className="adm-kpi-value" style={{ color: '#d97706' }}>{stats.requested_count}</p>
+                    <p className="adm-kpi-sub" style={{ color: '#b45309' }}>
+                        Requires manager authorization
                     </p>
-                    <span style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>Requires manager authorization</span>
                 </div>
 
-                <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>Completed & Restocked</span>
-                        <span style={{ background: '#ecfdf5', color: '#059669', padding: 8, borderRadius: 8 }}><BsBoxSeam size={16} /></span>
+                <div className="adm-kpi-card">
+                    <div className="adm-kpi-top">
+                        <div className="adm-kpi-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
+                            <BsBoxSeam size={18} />
+                        </div>
                     </div>
-                    <p style={{ fontSize: 24, fontWeight: 700, color: '#059669', margin: '10px 0 4px' }}>
-                        {stats.completed_count}
+                    <p className="adm-kpi-label">Completed & Restocked</p>
+                    <p className="adm-kpi-value" style={{ color: '#059669' }}>{stats.completed_count}</p>
+                    <p className="adm-kpi-sub">
+                        Inventory returned to shelf
                     </p>
-                    <span style={{ fontSize: 12, color: '#047857', fontWeight: 600 }}>Inventory returned to shelf</span>
                 </div>
 
-                <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>Financial Refunds</span>
-                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: 8, borderRadius: 8 }}><BsCurrencyRupee size={16} /></span>
+                <div className="adm-kpi-card">
+                    <div className="adm-kpi-top">
+                        <div className="adm-kpi-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                            <BsCurrencyRupee size={18} />
+                        </div>
                     </div>
-                    <p style={{ fontSize: 24, fontWeight: 700, color: '#111827', margin: '10px 0 4px' }}>
-                        {refundsList.length}
+                    <p className="adm-kpi-label">Financial Refunds</p>
+                    <p className="adm-kpi-value">{refundsList.length}</p>
+                    <p className="adm-kpi-sub">
+                        Vouchers & direct payouts
                     </p>
-                    <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 500 }}>Vouchers & direct payouts</span>
                 </div>
             </div>
 
@@ -1042,30 +1040,31 @@ export const ReturnsRefundsPage = () => {
                 {activeTab === 'returns' && (
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                            <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                <tr>
-                                    <th style={{ padding: '12px 18px' }}>Return #</th>
-                                    <th style={{ padding: '12px 18px' }}>Order ID</th>
-                                    <th style={{ padding: '12px 18px' }}>Customer ID</th>
-                                    <th style={{ padding: '12px 18px' }}>Reason</th>
-                                    <th style={{ padding: '12px 18px' }}>Type</th>
-                                    <th style={{ padding: '12px 18px' }}>Refund Value</th>
-                                    <th style={{ padding: '12px 18px' }}>Status</th>
-                                    <th style={{ padding: '12px 18px' }}>Date</th>
-                                    <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
+                            <thead>
+                                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <th style={{ padding: '9px 8px', width: 55, textAlign: 'center' }}>Sr. No.</th>
+                                    <th style={{ padding: '9px 14px' }}>Return #</th>
+                                    <th style={{ padding: '9px 14px' }}>Order ID</th>
+                                    <th style={{ padding: '9px 14px' }}>Customer ID</th>
+                                    <th style={{ padding: '9px 14px' }}>Reason</th>
+                                    <th style={{ padding: '9px 14px' }}>Type</th>
+                                    <th style={{ padding: '9px 14px' }}>Refund Value</th>
+                                    <th style={{ padding: '9px 14px' }}>Status</th>
+                                    <th style={{ padding: '9px 14px' }}>Date</th>
+                                    <th style={{ padding: '9px 14px', textAlign: 'center' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan="9" style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+                                        <td colSpan="10" style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
                                             <BsArrowClockwise size={20} className="spin" style={{ marginBottom: 8 }} />
                                             <div>Loading order returns records...</div>
                                         </td>
                                     </tr>
-                                ) : filteredReturns.length === 0 ? (
+                                ) : paginatedReturns.length === 0 ? (
                                     <tr>
-                                        <td colSpan="9" style={{ padding: '48px 18px', textAlign: 'center', color: '#9ca3af' }}>
+                                        <td colSpan="10" style={{ padding: '48px 18px', textAlign: 'center', color: '#9ca3af' }}>
                                             <BsArrowReturnLeft size={32} style={{ color: '#d1d5db', marginBottom: 8 }} />
                                             <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>No return records found</div>
                                             <div style={{ fontSize: 12.5, color: '#6b7280', marginTop: 4 }}>
@@ -1074,26 +1073,36 @@ export const ReturnsRefundsPage = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredReturns.map((row) => {
+                                    paginatedReturns.map((row, idx) => {
                                         const returnNum = row.return_number || `RET-${row.id}`;
                                         const status = String(row.status || '').toLowerCase();
                                         const isActionLoading = actionLoadingId?.includes(String(row.id));
+                                        const serialNumber = (pageReturns - 1) * pageSizeReturns + idx + 1;
 
                                         return (
-                                            <tr key={row.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#6366f1' }}>
+                                            <tr
+                                                key={row.id}
+                                                className="table-row-hover"
+                                                style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                                    {serialNumber}
+                                                </td>
+                                                <td style={{ padding: '9px 14px', fontWeight: 700, color: '#6366f1' }}>
                                                     {returnNum}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#374151', fontWeight: 600 }}>
+                                                <td style={{ padding: '9px 14px', color: '#374151', fontWeight: 600 }}>
                                                     #{row.order_id}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#4b5563' }}>
+                                                <td style={{ padding: '9px 14px', color: '#4b5563' }}>
                                                     Customer #{row.customer_id}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#374151', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.reason}>
+                                                <td style={{ padding: '9px 14px', color: '#374151', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.reason}>
                                                     {row.reason}
                                                 </td>
-                                                <td style={{ padding: '14px 18px' }}>
+                                                <td style={{ padding: '9px 14px' }}>
                                                     <span style={{
                                                         padding: '3px 8px',
                                                         borderRadius: 6,
@@ -1106,113 +1115,138 @@ export const ReturnsRefundsPage = () => {
                                                         {row.return_type || 'refund'}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
+                                                <td style={{ padding: '9px 14px', fontWeight: 700, color: '#111827' }}>
                                                     ₹{Number(row.refund_amount || row.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>
-                                                <td style={{ padding: '14px 18px' }}>
+                                                <td style={{ padding: '9px 14px' }}>
                                                     {renderStatusBadge(row.status)}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12 }}>
+                                                <td style={{ padding: '9px 14px', color: '#6b7280', fontSize: 12 }}>
                                                     {row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : '—'}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                                                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                                                <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                                                         {/* Manager Actions */}
                                                         {(status === 'requested' || status === 'pending') && (
                                                             <>
                                                                 <button
+                                                                    type="button"
                                                                     onClick={() => handleApproveReturn(row.id)}
                                                                     disabled={isActionLoading}
                                                                     title="Approve Return"
                                                                     style={{
-                                                                        background: '#ecfdf5',
-                                                                        border: '1px solid #10b981',
-                                                                        color: '#059669',
+                                                                        width: 28,
+                                                                        height: 28,
                                                                         borderRadius: 6,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 12,
-                                                                        fontWeight: 600,
+                                                                        border: '1px solid #e5e7eb',
+                                                                        background: '#ffffff',
+                                                                        color: '#059669',
                                                                         cursor: 'pointer',
-                                                                        display: 'flex',
+                                                                        display: 'inline-flex',
                                                                         alignItems: 'center',
-                                                                        gap: 4,
+                                                                        justifyContent: 'center',
+                                                                        transition: 'all 0.15s ease'
                                                                     }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.background = '#ecfdf5'; e.currentTarget.style.borderColor = '#a7f3d0'; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                                 >
-                                                                    <BsCheckLg size={13} /> Approve
+                                                                    <BsCheckLg size={13} />
                                                                 </button>
                                                                 <button
+                                                                    type="button"
                                                                     onClick={() => openRejectModal(row.id, 'return')}
                                                                     disabled={isActionLoading}
                                                                     title="Reject Return"
                                                                     style={{
-                                                                        background: '#fef2f2',
-                                                                        border: '1px solid #ef4444',
-                                                                        color: '#dc2626',
+                                                                        width: 28,
+                                                                        height: 28,
                                                                         borderRadius: 6,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 12,
-                                                                        fontWeight: 600,
+                                                                        border: '1px solid #e5e7eb',
+                                                                        background: '#ffffff',
+                                                                        color: '#dc2626',
                                                                         cursor: 'pointer',
-                                                                        display: 'flex',
+                                                                        display: 'inline-flex',
                                                                         alignItems: 'center',
-                                                                        gap: 4,
+                                                                        justifyContent: 'center',
+                                                                        transition: 'all 0.15s ease'
                                                                     }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                                 >
-                                                                    <BsX size={15} /> Reject
+                                                                    <BsX size={15} />
                                                                 </button>
                                                             </>
                                                         )}
 
                                                         {status === 'approved' && (
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleCompleteReturn(row.id)}
                                                                 disabled={isActionLoading}
                                                                 title="Complete & Restock Inventory"
                                                                 style={{
-                                                                    background: '#eff6ff',
-                                                                    border: '1px solid #3b82f6',
-                                                                    color: '#1d4ed8',
+                                                                    width: 28,
+                                                                    height: 28,
                                                                     borderRadius: 6,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 12,
-                                                                    fontWeight: 600,
+                                                                    border: '1px solid #e5e7eb',
+                                                                    background: '#ffffff',
+                                                                    color: '#2563eb',
                                                                     cursor: 'pointer',
-                                                                    display: 'flex',
+                                                                    display: 'inline-flex',
                                                                     alignItems: 'center',
-                                                                    gap: 4,
+                                                                    justifyContent: 'center',
+                                                                    transition: 'all 0.15s ease'
                                                                 }}
+                                                                onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                                                                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                             >
-                                                                <BsBoxSeam size={12} /> Restock
+                                                                <BsBoxSeam size={12} />
                                                             </button>
                                                         )}
 
                                                         {/* Details and Slip Buttons */}
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleViewDetails(row.id)}
                                                             title="View Details"
                                                             style={{
-                                                                background: '#f3f4f6',
-                                                                border: '1px solid #d1d5db',
+                                                                width: 28,
+                                                                height: 28,
                                                                 borderRadius: 6,
-                                                                padding: '4px 8px',
-                                                                color: '#374151',
+                                                                border: '1px solid #e5e7eb',
+                                                                background: '#ffffff',
+                                                                color: '#4f46e5',
                                                                 cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.15s ease'
                                                             }}
+                                                            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                         >
                                                             <BsEye size={13} />
                                                         </button>
 
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleDownloadSlip(row.id)}
                                                             title="Print/Preview RMA Slip"
                                                             style={{
-                                                                background: '#f3f4f6',
-                                                                border: '1px solid #d1d5db',
+                                                                width: 28,
+                                                                height: 28,
                                                                 borderRadius: 6,
-                                                                padding: '4px 8px',
+                                                                border: '1px solid #e5e7eb',
+                                                                background: '#ffffff',
                                                                 color: '#374151',
                                                                 cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.15s ease'
                                                             }}
+                                                            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                         >
                                                             <BsPrinter size={13} />
                                                         </button>
@@ -1224,6 +1258,91 @@ export const ReturnsRefundsPage = () => {
                                 )}
                             </tbody>
                         </table>
+
+                        {/* Pagination Controls for Order Returns */}
+                        <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 10 }}>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                Showing <strong>{filteredReturns.length > 0 ? (pageReturns - 1) * pageSizeReturns + 1 : 0}</strong> to <strong>{Math.min(pageReturns * pageSizeReturns, filteredReturns.length)}</strong> of <strong>{filteredReturns.length}</strong> returns
+                            </p>
+
+                            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                                {/* Entries per Page Dropdown */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                                    <select
+                                        className="ec-input"
+                                        value={pageSizeReturns}
+                                        onChange={e => {
+                                            setPageSizeReturns(Number(e.target.value));
+                                            setPageReturns(1);
+                                        }}
+                                        style={{
+                                            height: 32,
+                                            fontSize: 12,
+                                            padding: '0 8px',
+                                            borderRadius: 6,
+                                            background: '#ffffff',
+                                            border: '1px solid #d1d5db',
+                                            cursor: 'pointer',
+                                            fontWeight: 600,
+                                            color: '#374151',
+                                        }}
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                    </select>
+                                </div>
+
+                                {/* Navigation Controls: Arrows only */}
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageReturns === 1}
+                                        onClick={() => setPageReturns(prev => Math.max(1, prev - 1))}
+                                        title="Previous Page"
+                                        aria-label="Previous Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronLeft size={14} />
+                                    </button>
+
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                        Page {pageReturns} of {totalPagesReturns || 1}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageReturns >= totalPagesReturns}
+                                        onClick={() => setPageReturns(prev => Math.min(totalPagesReturns, prev + 1))}
+                                        title="Next Page"
+                                        aria-label="Next Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1231,30 +1350,31 @@ export const ReturnsRefundsPage = () => {
                 {activeTab === 'refunds' && (
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                            <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
+                            <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 <tr>
-                                    <th style={{ padding: '12px 18px' }}>Refund ID</th>
-                                    <th style={{ padding: '12px 18px' }}>Invoice #</th>
-                                    <th style={{ padding: '12px 18px' }}>Customer</th>
-                                    <th style={{ padding: '12px 18px' }}>Amount</th>
-                                    <th style={{ padding: '12px 18px' }}>Method</th>
-                                    <th style={{ padding: '12px 18px' }}>Credit Note #</th>
-                                    <th style={{ padding: '12px 18px' }}>Status</th>
-                                    <th style={{ padding: '12px 18px' }}>Date</th>
-                                    <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
+                                    <th style={{ padding: '9px 8px', width: 55, textAlign: 'center' }}>Sr. No.</th>
+                                    <th style={{ padding: '9px 14px' }}>Refund ID</th>
+                                    <th style={{ padding: '9px 14px' }}>Invoice #</th>
+                                    <th style={{ padding: '9px 14px' }}>Customer</th>
+                                    <th style={{ padding: '9px 14px' }}>Amount</th>
+                                    <th style={{ padding: '9px 14px' }}>Method</th>
+                                    <th style={{ padding: '9px 14px' }}>Credit Note #</th>
+                                    <th style={{ padding: '9px 14px' }}>Status</th>
+                                    <th style={{ padding: '9px 14px' }}>Date</th>
+                                    <th style={{ padding: '9px 14px', textAlign: 'center' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan="9" style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+                                        <td colSpan="10" style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
                                             <BsArrowClockwise size={20} className="spin" style={{ marginBottom: 8 }} />
                                             <div>Loading financial refunds...</div>
                                         </td>
                                     </tr>
                                 ) : filteredRefunds.length === 0 ? (
                                     <tr>
-                                        <td colSpan="9" style={{ padding: '48px 18px', textAlign: 'center', color: '#9ca3af' }}>
+                                        <td colSpan="10" style={{ padding: '48px 18px', textAlign: 'center', color: '#9ca3af' }}>
                                             <BsCurrencyRupee size={32} style={{ color: '#d1d5db', marginBottom: 8 }} />
                                             <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>No financial refund records found</div>
                                             <div style={{ fontSize: 12.5, color: '#6b7280', marginTop: 4 }}>
@@ -1263,25 +1383,34 @@ export const ReturnsRefundsPage = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredRefunds.map((row) => {
+                                    paginatedRefunds.map((row, idx) => {
                                         const status = String(row.status || '').toLowerCase();
                                         const isActionLoading = actionLoadingId?.includes(String(row.id));
 
                                         return (
-                                            <tr key={row.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#6366f1' }}>
+                                            <tr
+                                                key={row.id}
+                                                className="table-row-hover"
+                                                style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                                    {(pageRefunds - 1) * pageSizeRefunds + idx + 1}
+                                                </td>
+                                                <td style={{ padding: '9px 14px', fontWeight: 700, color: '#6366f1' }}>
                                                     REF-{row.id}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', fontWeight: 600, color: '#374151' }}>
+                                                <td style={{ padding: '9px 14px', fontWeight: 600, color: '#374151' }}>
                                                     {row.invoice_number || `INV-${row.invoice_id}`}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#4b5563' }}>
+                                                <td style={{ padding: '9px 14px', color: '#4b5563' }}>
                                                     {row.customer_name || (row.customer_id ? `Customer #${row.customer_id}` : 'Walk-in Customer')}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
+                                                <td style={{ padding: '9px 14px', fontWeight: 700, color: '#111827' }}>
                                                     ₹{Number(row.refund_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>
-                                                <td style={{ padding: '14px 18px' }}>
+                                                <td style={{ padding: '9px 14px' }}>
                                                     <span style={{
                                                         padding: '3px 8px',
                                                         borderRadius: 6,
@@ -1294,94 +1423,112 @@ export const ReturnsRefundsPage = () => {
                                                         {row.refund_method || 'cash'}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#4f46e5', fontWeight: 600 }}>
+                                                <td style={{ padding: '9px 14px', color: '#4f46e5', fontWeight: 600 }}>
                                                     {row.credit_note_no || (row.credit_note_id ? `CN-${row.credit_note_id}` : '—')}
                                                 </td>
-                                                <td style={{ padding: '14px 18px' }}>
+                                                <td style={{ padding: '9px 14px' }}>
                                                     {renderStatusBadge(row.status)}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12 }}>
+                                                <td style={{ padding: '9px 14px', color: '#6b7280', fontSize: 12 }}>
                                                     {row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : '—'}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                                                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                                                <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                                                         {(status === 'pending' || status === 'requested') && (
                                                             <>
                                                                 <button
+                                                                    type="button"
                                                                     onClick={() => handleApproveRefund(row.id)}
                                                                     disabled={isActionLoading}
                                                                     title="Approve Refund"
                                                                     style={{
-                                                                        background: '#ecfdf5',
-                                                                        border: '1px solid #10b981',
-                                                                        color: '#059669',
+                                                                        width: 28,
+                                                                        height: 28,
                                                                         borderRadius: 6,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 12,
-                                                                        fontWeight: 600,
+                                                                        border: '1px solid #e5e7eb',
+                                                                        background: '#ffffff',
+                                                                        color: '#059669',
                                                                         cursor: 'pointer',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        transition: 'all 0.15s ease',
                                                                     }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.background = '#ecfdf5'; e.currentTarget.style.borderColor = '#10b981'; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                                 >
-                                                                    Approve
+                                                                    <BsCheckCircleFill size={14} />
                                                                 </button>
                                                                 <button
+                                                                    type="button"
                                                                     onClick={() => openRejectModal(row.id, 'refund')}
                                                                     disabled={isActionLoading}
                                                                     title="Reject Refund"
                                                                     style={{
-                                                                        background: '#fef2f2',
-                                                                        border: '1px solid #ef4444',
-                                                                        color: '#dc2626',
+                                                                        width: 28,
+                                                                        height: 28,
                                                                         borderRadius: 6,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 12,
-                                                                        fontWeight: 600,
+                                                                        border: '1px solid #e5e7eb',
+                                                                        background: '#ffffff',
+                                                                        color: '#dc2626',
                                                                         cursor: 'pointer',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        transition: 'all 0.15s ease',
                                                                     }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                                 >
-                                                                    Reject
+                                                                    <BsXCircleFill size={14} />
                                                                 </button>
                                                             </>
                                                         )}
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleDownloadRefundPdf(row.id)}
                                                             disabled={isActionLoading}
                                                             title="Download Credit Note / Refund PDF"
                                                             style={{
-                                                                background: '#eff6ff',
-                                                                border: '1px solid #bfdbfe',
+                                                                width: 28,
+                                                                height: 28,
                                                                 borderRadius: 6,
-                                                                padding: '4px 8px',
+                                                                border: '1px solid #e5e7eb',
+                                                                background: '#ffffff',
                                                                 color: '#2563eb',
                                                                 cursor: 'pointer',
-                                                                display: 'flex',
+                                                                display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: 4,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.15s ease',
                                                             }}
+                                                            onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                         >
-                                                            <BsFileEarmarkPdf size={13} /> PDF
+                                                            <BsFileEarmarkPdf size={14} />
                                                         </button>
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleDownloadRefundThermal(row.id)}
                                                             disabled={isActionLoading}
                                                             title="Preview 80mm ESC/POS Thermal Slip"
                                                             style={{
-                                                                background: '#f3f4f6',
-                                                                border: '1px solid #d1d5db',
+                                                                width: 28,
+                                                                height: 28,
                                                                 borderRadius: 6,
-                                                                padding: '4px 8px',
-                                                                color: '#374151',
+                                                                border: '1px solid #e5e7eb',
+                                                                background: '#ffffff',
+                                                                color: '#4b5563',
                                                                 cursor: 'pointer',
-                                                                display: 'flex',
+                                                                display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: 4,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.15s ease',
                                                             }}
+                                                            onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                                                         >
-                                                            <BsPrinter size={13} /> Thermal
+                                                            <BsPrinter size={14} />
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1391,6 +1538,91 @@ export const ReturnsRefundsPage = () => {
                                 )}
                             </tbody>
                         </table>
+
+                        {/* Pagination Controls for Financial Refunds */}
+                        <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 10 }}>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                Showing <strong>{filteredRefunds.length > 0 ? (pageRefunds - 1) * pageSizeRefunds + 1 : 0}</strong> to <strong>{Math.min(pageRefunds * pageSizeRefunds, filteredRefunds.length)}</strong> of <strong>{filteredRefunds.length}</strong> records
+                            </p>
+
+                            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                                {/* Entries per Page Dropdown */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                                    <select
+                                        className="ec-input"
+                                        value={pageSizeRefunds}
+                                        onChange={e => {
+                                            setPageSizeRefunds(Number(e.target.value));
+                                            setPageRefunds(1);
+                                        }}
+                                        style={{
+                                            height: 32,
+                                            fontSize: 12,
+                                            padding: '0 8px',
+                                            borderRadius: 6,
+                                            background: '#ffffff',
+                                            border: '1px solid #d1d5db',
+                                            cursor: 'pointer',
+                                            fontWeight: 600,
+                                            color: '#374151',
+                                        }}
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                    </select>
+                                </div>
+
+                                {/* Navigation Controls: Arrows only */}
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageRefunds === 1}
+                                        onClick={() => setPageRefunds(prev => Math.max(1, prev - 1))}
+                                        title="Previous Page"
+                                        aria-label="Previous Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronLeft size={14} />
+                                    </button>
+
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                        Page {pageRefunds} of {totalPagesRefunds || 1}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        disabled={pageRefunds >= totalPagesRefunds}
+                                        onClick={() => setPageRefunds(prev => Math.min(totalPagesRefunds, prev + 1))}
+                                        title="Next Page"
+                                        aria-label="Next Page"
+                                        style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: 6,
+                                        }}
+                                    >
+                                        <BsChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
