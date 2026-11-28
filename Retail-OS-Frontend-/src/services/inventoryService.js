@@ -531,10 +531,46 @@ export const lowStock = async (storeId) => {
    11. LIST INVENTORY
 ========================================================= */
 
-export const listInventory = async (storeId) => {
-    const url = storeId
-        ? `/inventory?store_id=${storeId}`
-        : `/inventory`;
+export const listInventory = async (storeIdOrParams) => {
+    let url = `/inventory`;
+
+    if (storeIdOrParams && typeof storeIdOrParams === "object") {
+        const params = new URLSearchParams();
+        const {
+            store_id,
+            category_id,
+            search,
+            low_stock_only,
+            page,
+            page_size,
+        } = storeIdOrParams;
+
+        if (store_id !== undefined && store_id !== null && String(store_id).trim() !== "") {
+            params.set("store_id", String(store_id));
+        }
+        if (category_id !== undefined && category_id !== null && String(category_id).trim() !== "") {
+            params.set("category_id", String(category_id));
+        }
+        if (search !== undefined && search !== null && String(search).trim() !== "") {
+            params.set("search", String(search).trim());
+        }
+        if (low_stock_only === true || low_stock_only === "true") {
+            params.set("low_stock_only", "true");
+        }
+        if (page !== undefined && page !== null && Number(page) > 0) {
+            params.set("page", String(page));
+        }
+        if (page_size !== undefined && page_size !== null && Number(page_size) > 0) {
+            params.set("page_size", String(page_size));
+        }
+
+        const qs = params.toString();
+        if (qs) {
+            url = `/inventory?${qs}`;
+        }
+    } else if (storeIdOrParams) {
+        url = `/inventory?store_id=${storeIdOrParams}`;
+    }
 
     return deduplicateGet(url, async () => {
         try {

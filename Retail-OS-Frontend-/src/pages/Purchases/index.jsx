@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from "react";
 import "./purchase.css";
+import {
+  PageContainer,
+  PageHeader,
+  KpiGrid,
+  KpiCard,
+  SectionCard,
+  SearchInput,
+  StatusBadge,
+  Pagination,
+} from "../../components/Common";
 
 import {
   getPurchaseOrders,
@@ -2875,45 +2885,21 @@ const Purchases = () => {
   ===================================================== */
 
   return (
-    <div className="dash-page purchase-page-wrapper">
-      <div className="purchase-page-content">
-
-        {/* HEADER */}
-
-        <div className="adm-page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
-          <div>
-            <h1 className="adm-page-title" style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 22, fontWeight: 800, color: "#111827", margin: 0 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: "#eef2ff", color: "#4f46e5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <BsCart3 size={20} />
-              </div>
-              <span>Purchases</span>
-            </h1>
-
-            <p className="adm-page-sub" style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>
-              Manage purchase orders, suppliers, inwarding, and incoming stock
-            </p>
-          </div>
-
-          <div className="adm-header-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <PageContainer className="purchase-page-wrapper">
+      {/* HEADER */}
+      <PageHeader
+        title="Purchases"
+        subtitle="Manage purchase orders, suppliers, inwarding, and incoming stock"
+        icon={<BsCart3 />}
+        actions={
+          <>
             <button
               type="button"
+              className="adm-btn-secondary"
               onClick={fetchPurchases}
               disabled={loading}
               title="Refresh purchases"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "9px 14px",
-                borderRadius: 8,
-                fontWeight: 600,
-                fontSize: 13,
-                background: "#ffffff",
-                color: "#374151",
-                border: "1px solid #d1d5db",
-                cursor: loading ? "not-allowed" : "pointer",
-                transition: "all 0.15s ease",
-              }}
+              aria-label="Refresh purchases"
             >
               <BsArrowRepeat size={15} className={loading ? "animate-spin" : ""} />
               <span>Refresh</span>
@@ -2923,344 +2909,238 @@ const Purchases = () => {
               type="button"
               className="adm-btn-primary"
               onClick={() => setModal("new")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "9px 16px",
-                borderRadius: 8,
-                fontWeight: 600,
-                fontSize: 13,
-                background: "#4f46e5",
-                color: "#ffffff",
-                border: "none",
-                cursor: "pointer",
-                boxShadow: "0 2px 4px rgba(79, 70, 229, 0.2)",
-                transition: "background-color 0.15s ease",
-              }}
+              title="Add new purchase order"
+              aria-label="Add new purchase order"
             >
               <BsPlus size={18} />
               <span>Add Purchase</span>
             </button>
+          </>
+        }
+      />
+
+      {/* ERROR */}
+      {error && (
+        <div className="dashboard-error-banner">
+          <div className="dashboard-error-text">
+            <BsXCircleFill size={16} />
+            <span>{error}</span>
           </div>
-        </div>
-
-        {/* ERROR */}
-
-        {error && (
-          <div
-            style={{
-              background:
-                "#fef2f2",
-              color: "#dc2626",
-              padding: 12,
-              borderRadius: 8,
-              margin: 0,
-            }}
+          <button
+            type="button"
+            className="dashboard-retry-btn"
+            onClick={fetchPurchases}
           >
-            {error}
-          </div>
-        )}
-
-        {/* LOADING */}
-
-        {loading && (
-          <div
-            style={{
-              padding: 20,
-              textAlign:
-                "center",
-              color: "#6b7280",
-            }}
-          >
-            Loading purchases...
-          </div>
-        )}
-
-        {/* KPI SUMMARY CARDS */}
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {kpis.map((k, i) => {
-            const isClickable = Boolean(k.filterStatus);
-            const isSelected =
-              k.filterStatus && filterStatus === k.filterStatus;
-
-            return (
-              <div
-                key={i}
-                className={`purchase-stat-card ${
-                  isClickable ? "purchase-stat-card--clickable" : ""
-                } ${isSelected ? "purchase-stat-card--selected" : ""}`}
-                style={{
-                  background: "#ffffff",
-                  borderRadius: 12,
-                  padding: "16px 18px",
-                  border: isSelected ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
-                  boxShadow: isSelected
-                    ? "0 0 0 3px rgba(99, 102, 241, 0.15)"
-                    : "0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  boxSizing: "border-box",
-                  cursor: isClickable ? "pointer" : "default",
-                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-                onClick={() => {
-                  if (k.filterStatus) {
-                    setFilterStatus(k.filterStatus);
-                    setPage(1);
-                  }
-                }}
-                role={isClickable ? "button" : undefined}
-                tabIndex={isClickable ? 0 : undefined}
-                onKeyDown={(e) => {
-                  if (isClickable && (e.key === "Enter" || e.key === " ")) {
-                    e.preventDefault();
-                    setFilterStatus(k.filterStatus);
-                    setPage(1);
-                  }
-                }}
-                title={isClickable ? `Filter by ${k.label}` : undefined}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    {k.label}
-                  </span>
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      background: k.iconBg,
-                      color: k.iconColor,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {k.icon}
-                  </div>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: k.label === "Purchase Value" ? 22 : 26,
-                      fontWeight: 800,
-                      color: "#0f172a",
-                      lineHeight: 1.15,
-                      letterSpacing: "-0.02em",
-                      marginBottom: 4,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {k.value}
-                  </div>
-                  {k.sub && (
-                    <div
-                      style={{
-                        fontSize: 11.5,
-                        fontWeight: 500,
-                        color: "#64748b",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {k.sub}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+            Retry
+          </button>
         </div>
+      )}
 
-        {/* SEARCH AND FILTERS TOOLBAR */}
+      {/* KPI SUMMARY CARDS */}
+      <KpiGrid columns={5} ariaLabel="Purchase Summary Indicators">
+        {kpis.map((k, i) => {
+          const isClickable = Boolean(k.filterStatus);
+          const isSelected = Boolean(k.filterStatus && filterStatus === k.filterStatus);
 
-        <div style={{ background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)", marginBottom: 20, overflow: "hidden" }}>
-          <div className="purchase-toolbar-container">
-            <div className="purchase-toolbar-row">
-              {/* 1. Search Box */}
-              <div className="purchase-search-box">
-                <BsSearch
-                  size={13}
-                  className="purchase-search-icon"
-                  aria-hidden="true"
-                />
-                <input
-                  id="purchase-search-input"
-                  className="purchase-search-input"
-                  placeholder="Search PO number, supplier, or invoice..."
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  aria-label="Search purchases"
-                />
-                {search && (
-                  <button
-                    type="button"
-                    className="purchase-search-clear-btn"
-                    onClick={() => {
-                      setSearch("");
+          return (
+            <KpiCard
+              key={i}
+              title={k.label}
+              value={k.value}
+              subtitle={k.sub}
+              subtitleColor="#64748b"
+              icon={k.icon}
+              accentColor={k.color}
+              valueColor={k.color}
+              active={isSelected}
+              loading={loading && purchases.length === 0}
+              tooltip={isClickable ? `Filter by ${k.label}` : k.label}
+              onClick={
+                isClickable
+                  ? () => {
+                      setFilterStatus(k.filterStatus);
                       setPage(1);
-                    }}
-                    title="Clear search"
-                    aria-label="Clear search"
-                  >
-                    <BsX size={14} />
-                  </button>
-                )}
-              </div>
+                    }
+                  : undefined
+              }
+            />
+          );
+        })}
+      </KpiGrid>
 
-              {/* 2. Status Filter Dropdown */}
-              <div className="purchase-filter-wrapper purchase-status-wrapper">
-                <BsActivity className="purchase-filter-prefix-icon" size={13} style={{ color: "#6366f1" }} />
-                <select
-                  id="purchase-status-select"
-                  className={`purchase-filter-select ${filterStatus !== "All" ? "is-active" : ""}`}
-                  value={filterStatus}
-                  onChange={(e) => {
-                    setFilterStatus(e.target.value);
-                    setPage(1);
-                  }}
-                  aria-label="Filter by status"
-                >
-                  <option value="All">All Purchases</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Received">Received</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-                <BsChevronDown size={11} className="purchase-select-icon" />
-              </div>
-
-              {/* 3. Supplier Filter Dropdown */}
-              <div className="purchase-filter-wrapper purchase-supplier-wrapper">
-                <BsBuildings className="purchase-filter-prefix-icon" size={13} style={{ color: "#0ea5e9" }} />
-                <select
-                  id="purchase-supplier-select"
-                  className={`purchase-filter-select ${supplierFilter !== "All" ? "is-active" : ""}`}
-                  value={supplierFilter}
-                  onChange={(e) => {
-                    setSupplierFilter(e.target.value);
-                    setPage(1);
-                  }}
-                  aria-label="Filter by supplier"
-                >
-                  <option value="All">All Suppliers</option>
-                  {suppliers?.map((supplier) => (
-                    <option key={supplier.id} value={String(supplier.id)}>
-                      {supplier.name}
-                    </option>
-                  ))}
-                </select>
-                <BsChevronDown size={11} className="purchase-select-icon" />
-              </div>
-
-              {/* 4. Active Filters Indicator & Reset */}
-              {isFilterActive && (
-                <div className="purchase-filter-actions">
-                  <div className="purchase-active-badge">
-                    <BsFunnel size={11} />
-                    <span>Filters Active</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="purchase-reset-btn"
-                    onClick={handleResetFilters}
-                    title="Reset all filters to default"
-                  >
-                    <BsArrowRepeat size={13} />
-                    <span>Reset</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* TABLE */}
-        <div
-          className="chart-card purchase-table-container"
-          style={{
-            padding: 0,
-            overflow: "hidden",
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
-            borderRadius: 12,
-            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-          }}
-        >
-          <div style={{ width: "100%", overflowX: "auto" }}>
-            <table
-              className="purchase-table"
-              style={{
-                width: "100%",
-                minWidth: "1100px",
-                borderCollapse: "collapse",
-                textAlign: "left",
+      {/* SEARCH AND FILTERS TOOLBAR */}
+      <SectionCard
+        title="Search & Filter Purchases"
+        subtitle="Filter purchase orders by PO number, supplier, invoice or status"
+        icon={<BsFunnel />}
+        iconVariant="blue"
+      >
+        <div className="purchase-toolbar-row">
+          {/* 1. Search Box */}
+          <div className="purchase-search-input-container">
+            <SearchInput
+              id="purchase-search-input"
+              className="purchase-search-input-wrap"
+              placeholder="Search PO number, supplier, or invoice..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
               }}
+              icon={<BsSearch size={14} />}
+              aria-label="Search purchases"
+            />
+            {search && (
+              <button
+                type="button"
+                className="purchase-search-clear-btn"
+                onClick={() => {
+                  setSearch("");
+                  setPage(1);
+                }}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <BsX size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* 2. Status Filter Dropdown */}
+          <div className="purchase-filter-wrapper purchase-status-wrapper">
+            <BsActivity className="purchase-filter-prefix-icon" size={13} style={{ color: "#6366f1" }} />
+            <select
+              id="purchase-status-select"
+              className={`purchase-filter-select ${filterStatus !== "All" ? "is-active" : ""}`}
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Filter by status"
             >
-              <thead>
-                <tr
-                  style={{
-                    background: "#f8fafc",
-                    borderBottom: "1.5px solid #e2e8f0",
+              <option value="All">All Purchases</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Received">Received</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+            <BsChevronDown size={11} className="purchase-select-icon" />
+          </div>
+
+          {/* 3. Supplier Filter Dropdown */}
+          <div className="purchase-filter-wrapper purchase-supplier-wrapper">
+            <BsBuildings className="purchase-filter-prefix-icon" size={13} style={{ color: "#0ea5e9" }} />
+            <select
+              id="purchase-supplier-select"
+              className={`purchase-filter-select ${supplierFilter !== "All" ? "is-active" : ""}`}
+              value={supplierFilter}
+              onChange={(e) => {
+                setSupplierFilter(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Filter by supplier"
+            >
+              <option value="All">All Suppliers</option>
+              {suppliers?.map((supplier) => (
+                <option key={supplier.id} value={String(supplier.id)}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+            <BsChevronDown size={11} className="purchase-select-icon" />
+          </div>
+
+          {/* 4. Active Filters Indicator & Reset */}
+          {isFilterActive && (
+            <div className="purchase-filter-actions">
+              <div className="purchase-active-badge">
+                <BsFunnel size={11} />
+                <span>Filters Active</span>
+              </div>
+              <button
+                type="button"
+                className="adm-btn-secondary purchase-reset-btn"
+                onClick={handleResetFilters}
+                title="Reset all filters to default"
+              >
+                <BsArrowRepeat size={13} />
+                <span>Reset</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* TABLE */}
+      <SectionCard
+        title="Purchase Orders"
+        subtitle={`Showing ${filtered.length} ${filtered.length === 1 ? "purchase order" : "purchase orders"}`}
+        icon={<BsCart3 />}
+        iconVariant="blue"
+        className="purchase-table-container"
+        headerActions={
+          <div className="purchase-status-tabs" role="tablist" aria-label="Filter purchases by status">
+            {STATUS_TABS.map((tab) => {
+              const isActive = filterStatus === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`purchase-status-tab ${isActive ? "active" : ""}`}
+                  onClick={() => {
+                    setFilterStatus(tab.key);
+                    setPage(1);
                   }}
+                  title={`Filter by ${tab.label}`}
                 >
-                  {[
-                    { label: "Purchase Order #", align: "left", minWidth: "180px" },
-                    { label: "Supplier", align: "left", minWidth: "170px" },
-                    { label: "Store / Dest", align: "left", minWidth: "150px" },
-                    { label: "Invoice #", align: "left", minWidth: "110px" },
-                    { label: "Date", align: "left", minWidth: "110px" },
-                    { label: "Items", align: "left", minWidth: "90px" },
-                    { label: "Total", align: "left", minWidth: "110px" },
-                    { label: "Payment", align: "left", minWidth: "100px" },
-                    { label: "Status", align: "left", minWidth: "110px" },
-                    { label: "Actions", align: "right", minWidth: "260px" },
-                  ].map((col) => (
-                    <th
-                      key={col.label}
-                      style={{
-                        padding: "13px 16px",
-                        textAlign: col.align,
-                        minWidth: col.minWidth,
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        color: "#475569",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+                  <span>{tab.label}</span>
+                  <span className="purchase-status-tab-count">{tab.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        }
+      >
+        <div className="dashboard-table-wrap purchase-table-wrap">
+          <table
+            className="dashboard-table purchase-table"
+            style={{
+              width: "100%",
+              minWidth: "1100px",
+              borderCollapse: "collapse",
+              textAlign: "left",
+            }}
+          >
+            <thead>
+              <tr>
+                {[
+                  { label: "Purchase Order #", align: "left", minWidth: "180px" },
+                  { label: "Supplier", align: "left", minWidth: "170px" },
+                  { label: "Store / Dest", align: "left", minWidth: "150px" },
+                  { label: "Invoice #", align: "left", minWidth: "110px" },
+                  { label: "Date", align: "left", minWidth: "110px" },
+                  { label: "Items", align: "left", minWidth: "90px" },
+                  { label: "Total", align: "left", minWidth: "110px" },
+                  { label: "Payment", align: "left", minWidth: "100px" },
+                  { label: "Status", align: "left", minWidth: "110px" },
+                  { label: "Actions", align: "right", minWidth: "240px" },
+                ].map((col) => (
+                  <th
+                    key={col.label}
+                    style={{
+                      textAlign: col.align,
+                      minWidth: col.minWidth,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
               <tbody>
                 {paginated.map((purchase) => {
                   const displayStatus = getDisplayStatus(
@@ -3422,60 +3302,40 @@ const Purchases = () => {
                       </td>
 
                       {/* PAYMENT */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: "3px 9px",
-                            borderRadius: 12,
-                            whiteSpace: "nowrap",
-                            background:
-                              purchase.paymentStatus?.toLowerCase() === "paid"
-                                ? "#ecfdf5"
-                                : purchase.paymentStatus?.toLowerCase() === "partial"
-                                ? "#fffbeb"
-                                : "#fef2f2",
-                            color:
-                              purchase.paymentStatus?.toLowerCase() === "paid"
-                                ? "#065f46"
-                                : purchase.paymentStatus?.toLowerCase() === "partial"
-                                ? "#92400e"
-                                : "#991b1b",
-                            border: `1px solid ${
-                              purchase.paymentStatus?.toLowerCase() === "paid"
-                                ? "#a7f3d0"
-                                : purchase.paymentStatus?.toLowerCase() === "partial"
-                                ? "#fde68a"
-                                : "#fecaca"
-                            }`,
-                          }}
-                        >
-                          {purchase.paymentStatus || "Unpaid"}
-                        </span>
+                      <td style={{ verticalAlign: "middle" }}>
+                        <StatusBadge
+                          label={purchase.paymentStatus || "Unpaid"}
+                          variant={
+                            purchase.paymentStatus?.toLowerCase() === "paid"
+                              ? "success"
+                              : purchase.paymentStatus?.toLowerCase() === "partial"
+                              ? "warning"
+                              : "danger"
+                          }
+                        />
                       </td>
 
                       {/* STATUS */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                            padding: "4px 10px",
-                            borderRadius: 20,
-                            fontSize: 11.5,
-                            fontWeight: 600,
-                            background: sc.bg,
-                            color: sc.color,
-                            border: `1px solid ${sc.color}25`,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {sc.icon}
-                          <span>{purchase.status}</span>
-                        </span>
+                      <td style={{ verticalAlign: "middle" }}>
+                        <StatusBadge
+                          label={
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                              {sc.icon}
+                              <span>{purchase.status}</span>
+                            </span>
+                          }
+                          variant={
+                            displayStatus === "Received"
+                              ? "success"
+                              : displayStatus === "Approved"
+                              ? "info"
+                              : displayStatus === "Pending"
+                              ? "warning"
+                              : displayStatus === "Cancelled"
+                              ? "danger"
+                              : "neutral"
+                          }
+                        />
                       </td>
 
                       {/* ACTIONS */}
@@ -3747,141 +3607,21 @@ const Purchases = () => {
 
           {/* PAGINATION */}
           {!loading && filtered.length > 0 && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto 1fr",
-                alignItems: "center",
-                padding: "14px 20px",
-                borderTop: "1px solid #e2e8f0",
-                background: "#ffffff",
-                gap: 12,
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(newSize) => {
+                setPageSize(newSize);
+                setPage(1);
               }}
-            >
-              {/* Left: Page-Size Dropdown */}
-              <div style={{ display: "flex", alignItems: "center", justifySelf: "start" }}>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  style={{
-                    height: 32,
-                    padding: "0 10px",
-                    border: "1.5px solid #e2e8f0",
-                    borderRadius: 7,
-                    fontSize: 12.5,
-                    background: "#ffffff",
-                    color: "#1e293b",
-                    outline: "none",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                  aria-label="Select rows per page"
-                >
-                  <option value={8}>8</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-
-              {/* Center: Showing record count */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  justifySelf: "center",
-                  fontSize: 13,
-                  color: "#64748b",
-                  fontWeight: 500,
-                  whiteSpace: "nowrap",
-                  textAlign: "center",
-                }}
-              >
-                Showing{" "}
-                <strong style={{ color: "#0f172a", fontWeight: 700, margin: "0 4px" }}>
-                  {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}
-                </strong>{" "}
-                to{" "}
-                <strong style={{ color: "#0f172a", fontWeight: 700, margin: "0 4px" }}>
-                  {Math.min(filtered.length, page * pageSize)}
-                </strong>{" "}
-                of{" "}
-                <strong style={{ color: "#0f172a", fontWeight: 700, margin: "0 4px" }}>
-                  {filtered.length}
-                </strong>{" "}
-                {filtered.length === 1 ? "purchase" : "purchases"}
-              </div>
-
-              {/* Right: Page Numbers */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  justifySelf: "end",
-                  gap: 6,
-                }}
-              >
-                {getPageNumbers().map((p, idx) => {
-                  if (p === "...") {
-                    return (
-                      <span
-                        key={`ellipsis-${idx}`}
-                        style={{
-                          minWidth: 28,
-                          height: 34,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#94a3b8",
-                          fontSize: 13,
-                          fontWeight: 600,
-                        }}
-                      >
-                        …
-                      </span>
-                    );
-                  }
-                  const isActive = p === page;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPage(p)}
-                      style={{
-                        minWidth: 34,
-                        height: 34,
-                        padding: "0 8px",
-                        borderRadius: 8,
-                        border: isActive
-                          ? "1.5px solid #4f46e5"
-                          : "1.5px solid #cbd5e1",
-                        background: isActive ? "#4f46e5" : "#ffffff",
-                        color: isActive ? "#ffffff" : "#334155",
-                        fontSize: 12.5,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                        boxShadow: isActive
-                          ? "0 1px 3px rgba(79, 70, 229, 0.3)"
-                          : "none",
-                      }}
-                      aria-label={`Page ${p}`}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              pageSizeOptions={[8, 10, 20, 50, 100]}
+              itemLabel={filtered.length === 1 ? "purchase" : "purchases"}
+            />
           )}
-        </div>
+        </SectionCard>
 
         {/* ADD / EDIT MODAL */}
 
@@ -4463,8 +4203,7 @@ const Purchases = () => {
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </PageContainer>
   );
 };
 

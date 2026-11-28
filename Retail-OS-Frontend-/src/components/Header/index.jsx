@@ -110,8 +110,9 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         return () => window.removeEventListener('retail-os:notification', handleSystemNotif);
     }, []);
 
-    // Fetch dashboard summary for real inventory alerts
+    // Fetch dashboard summary for real inventory alerts (skip on Inventory Stock page)
     useEffect(() => {
+        if (isInventoryStock) return;
         let isMounted = true;
         getDashboardSummary()
             .then((data) => {
@@ -123,7 +124,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         return () => {
             isMounted = false;
         };
-    }, [location.pathname]);
+    }, [location.pathname, isInventoryStock]);
 
     // Notification items derived from summary & real-time system notifications
     const notificationItems = useMemo(() => {

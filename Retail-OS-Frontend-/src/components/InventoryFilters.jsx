@@ -1,9 +1,12 @@
 import React from "react";
 import "./InventoryFilters.css";
+import { SearchInput } from "./Common";
 import {
   FiRotateCcw,
   FiFilter,
   FiDownload,
+  FiSearch,
+  FiX,
 } from "react-icons/fi";
 
 const InventoryFilters = ({
@@ -11,11 +14,9 @@ const InventoryFilters = ({
   setSearch,
 
   inventory,
-  products,
-  stores,
   categories,
   warehouses,
-  suppliers,
+  stores,
 
   filterWarehouse,
   setFilterWarehouse,
@@ -23,14 +24,8 @@ const InventoryFilters = ({
   filterCat,
   setFilterCat,
 
-  filterSupplier,
-  setFilterSupplier,
-
   filterStatus,
   setFilterStatus,
-
-  filterDate,
-  setFilterDate,
 
   onSearch,
   onExport,
@@ -53,27 +48,6 @@ const InventoryFilters = ({
         );
 
   /* =====================================================
-     SUPPLIER OPTIONS
-  ===================================================== */
-
-  const supplierOptions =
-    Array.isArray(suppliers) && suppliers.length > 0
-      ? suppliers.filter((supplier) => supplier?.is_active !== false)
-      : [
-          ...new Set(
-            (inventory || [])
-              .map((item) =>
-                String(
-                  item?.supplier_name ||
-                    item?.supplierName ||
-                    ""
-                ).trim()
-              )
-              .filter(Boolean)
-          ),
-        ];
-
-  /* =====================================================
      CLEAR / RESET FILTERS
   ===================================================== */
 
@@ -83,13 +57,7 @@ const InventoryFilters = ({
     }
     setFilterWarehouse("All Warehouses");
     setFilterCat("All Categories");
-    setFilterSupplier("All Suppliers");
     setFilterStatus("All");
-    setFilterDate("");
-
-    if (typeof onSearch === "function") {
-      onSearch();
-    }
   };
 
   /* =====================================================
@@ -162,11 +130,44 @@ const InventoryFilters = ({
   return (
     <div className="inventory-filters">
       {/* =================================================
-          FILTERS ROW
-          Warehouse + Category + Supplier + Stock Status + Created Date
+          SEARCH & FILTERS GRID
       ================================================= */}
-
       <div className="filters-row filters-row-middle">
+        {/* =====================
+            Search Product / SKU
+        ===================== */}
+        <div className="filter-group search-product-group">
+          <label htmlFor="inventory-search">
+            Search Product / SKU
+          </label>
+          <div className="inv-search-input-container">
+            <SearchInput
+              id="inventory-search"
+              className="inv-filter-search"
+              value={search || ""}
+              onChange={(e) => setSearch && setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
+              placeholder="Search by product name or SKU..."
+              icon={<FiSearch size={14} />}
+            />
+            {search && (
+              <button
+                type="button"
+                className="inv-search-clear-btn"
+                onClick={() => setSearch && setSearch("")}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <FiX size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* =====================
             Warehouse
         ===================== */}
@@ -245,49 +246,6 @@ const InventoryFilters = ({
         </div>
 
         {/* =====================
-            Supplier
-        ===================== */}
-
-        <div className="filter-group">
-          <label htmlFor="inventory-supplier">
-            Supplier
-          </label>
-
-          <select
-            id="inventory-supplier"
-            value={filterSupplier}
-            onChange={(e) =>
-              setFilterSupplier(e.target.value)
-            }
-          >
-            <option value="All Suppliers">
-              All Suppliers
-            </option>
-
-            {supplierOptions.map((supplier) => {
-              const id = typeof supplier === "object" ? supplier.id : supplier;
-              const name =
-                typeof supplier === "object"
-                  ? supplier.name || `Supplier #${supplier.id}`
-                  : supplier;
-              const value =
-                typeof supplier === "object"
-                  ? supplier.name || String(supplier.id)
-                  : supplier;
-
-              return (
-                <option
-                  key={id}
-                  value={value}
-                >
-                  {name}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        {/* =====================
             Stock Status
         ===================== */}
 
@@ -326,25 +284,6 @@ const InventoryFilters = ({
         </div>
 
         {/* =====================
-            Created Date
-        ===================== */}
-
-        <div className="filter-group created-date-group">
-          <label htmlFor="inventory-created-date">
-            Created Date
-          </label>
-
-          <input
-            id="inventory-created-date"
-            type="date"
-            value={filterDate}
-            onChange={(e) =>
-              setFilterDate(e.target.value)
-            }
-          />
-        </div>
-
-        {/* =====================
             Filter Actions (Filter, Clear, Export)
         ===================== */}
         <div className="filter-group filter-action-group">
@@ -355,39 +294,39 @@ const InventoryFilters = ({
             {/* Filter */}
             <button
               type="button"
-              className="filter-btn search-btn"
+              className="adm-btn-primary inv-filter-action-btn"
               onClick={handleSearch}
               title="Filter – Apply the selected filter criteria"
               aria-label="Filter – Apply the selected filter criteria"
               data-action="filter"
             >
-              <FiFilter size={15} />
+              <FiFilter size={14} />
               <span>Filter</span>
             </button>
 
             {/* Clear */}
             <button
               type="button"
-              className="clear-btn reset-btn"
+              className="adm-btn-secondary inv-filter-action-btn"
               onClick={handleReset}
               title="Clear – Reset all selected filters"
               aria-label="Clear – Reset all selected filters"
               data-action="clear"
             >
-              <FiRotateCcw size={15} />
+              <FiRotateCcw size={14} />
               <span>Clear</span>
             </button>
 
             {/* Export */}
             <button
               type="button"
-              className="export-btn"
+              className="adm-btn-secondary inv-filter-action-btn"
               onClick={handleExport}
               title="Export – Download/export inventory data"
               aria-label="Export – Download/export inventory data"
               data-action="export"
             >
-              <FiDownload size={15} />
+              <FiDownload size={14} />
               <span>Export</span>
             </button>
           </div>

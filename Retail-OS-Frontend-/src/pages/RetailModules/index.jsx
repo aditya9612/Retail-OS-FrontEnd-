@@ -19,7 +19,16 @@ import { getStoreTransfers, getStoreTransfersSummary, getStoreTransferById, appr
 import notificationService from '../../utils/notificationService';
 import '../../components/Common/PageComponents.css';
 import '../../components/Categories/CategoryCards.css';
-import { PageContainer, PageHeader, KpiGrid, KpiCard } from '../../components/Common/PageComponents';
+import {
+    PageContainer,
+    PageHeader,
+    KpiGrid,
+    KpiCard,
+    SectionCard,
+    SearchInput,
+    StatusBadge,
+    Pagination,
+} from '../../components/Common/PageComponents';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
@@ -1299,7 +1308,12 @@ export const WarehousesPage = () => {
     const handleSearchSubmit = (e) => {
         if (e) e.preventDefault();
         setPage(1);
-        fetchWarehouses({ page: 1, search: search.trim() });
+        fetchWarehouses({
+            page: 1,
+            search: search.trim(),
+            storeFilter,
+            statusFilter,
+        });
     };
 
     const handleResetFilters = () => {
@@ -1954,95 +1968,112 @@ export const WarehousesPage = () => {
     );
 
     return (
-        <div className="warehouse-page-root">
-            <div className="wh-page-inner">
-                {/* 1. Page Header */}
-                <header className="wh-page-header">
-                    <div className="wh-header-left">
-                        <div className="wh-header-icon-box">
-                            <BsBuildings size={22} />
-                        </div>
-                        <div className="wh-header-text">
-                            <h1 className="wh-page-title">Warehouses &amp; Stock Locations</h1>
-                            <p className="wh-page-subtitle">Central depots, store stockrooms, transit hubs and multi-location inventory levels</p>
-                        </div>
-                    </div>
-                    <div className="wh-header-actions">
+        <PageContainer className="warehouse-page-root">
+            {/* 1. Page Header */}
+            <PageHeader
+                title="Warehouses & Stock Locations"
+                subtitle="Central depots, store stockrooms, transit hubs and multi-location inventory levels"
+                icon={<BsBuildings />}
+                actions={
+                    <>
                         <button
                             type="button"
                             onClick={handleRefresh}
                             disabled={loading || dashboardLoading}
                             title="Refresh Warehouses"
-                            className="wh-refresh-btn"
+                            aria-label="Refresh Warehouses"
+                            className="adm-btn-secondary"
                         >
-                            <BsArrowRepeat size={16} className={loading || dashboardLoading ? "wh-spin" : ""} />
+                            <BsArrowRepeat size={15} className={loading || dashboardLoading ? "wh-spin" : ""} />
                             <span>Refresh</span>
                         </button>
                         <button
                             type="button"
                             onClick={handleOpenAddModal}
                             title="Add New Warehouse"
-                            className="wh-add-btn"
+                            aria-label="Add New Warehouse"
+                            className="adm-btn-primary"
                         >
-                            <BsPlus size={20} />
+                            <BsPlus size={18} />
                             <span>Add Warehouse</span>
                         </button>
-                    </div>
-                </header>
+                    </>
+                }
+            />
 
-                {/* 2. SaaS KPI Summary Cards */}
-                <div className="wh-kpi-grid">
-                    <WarehouseStatCard
-                        label="Total Warehouses"
-                        value={dashboardLoading ? '...' : totalWarehouses}
-                        sub="Registered stock locations"
-                        icon={<BsBuildings size={18} />}
-                        iconBg="#eef2ff"
-                        iconColor="#4f46e5"
-                        accentColor="indigo"
-                        trendType="neutral"
-                    />
-                    <WarehouseStatCard
-                        label="Active Warehouses"
-                        value={dashboardLoading ? '...' : activeWarehouses}
-                        sub="Operational & ready"
-                        icon={<BsCheckCircleFill size={18} />}
-                        iconBg="#ecfdf5"
-                        iconColor="#059669"
-                        accentColor="emerald"
-                        trendType="success"
-                    />
-                    <WarehouseStatCard
-                        label="Inactive Warehouses"
-                        value={dashboardLoading ? '...' : inactiveWarehouses}
-                        sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
-                        icon={<BsExclamationTriangle size={18} />}
-                        iconBg={Number(inactiveWarehouses) > 0 ? "#fff1f2" : "#f8fafc"}
-                        iconColor={Number(inactiveWarehouses) > 0 ? "#e11d48" : "#64748b"}
-                        accentColor={Number(inactiveWarehouses) > 0 ? "rose" : "neutral"}
-                        trendType={Number(inactiveWarehouses) > 0 ? "danger" : "neutral"}
-                    />
-                    <WarehouseStatCard
-                        label="Total Stock Units"
-                        value={dashboardLoading ? '...' : totalStockUnits}
-                        sub="Units in warehouses"
-                        icon={<BsBoxSeam size={18} />}
-                        iconBg="#f0f9ff"
-                        iconColor="#0284c7"
-                        accentColor="sky"
-                        trendType="info"
-                    />
-                    <WarehouseStatCard
-                        label="Total Stock Value"
-                        value={dashboardLoading ? '...' : totalStockValue}
-                        sub="Inventory valuation"
-                        icon={<BsCashStack size={18} />}
-                        iconBg="#f5f3ff"
-                        iconColor="#7c3aed"
-                        accentColor="violet"
-                        trendType="purple"
-                    />
-                </div>
+            {/* 2. Dashboard-Aligned KPI Summary Cards */}
+            <KpiGrid columns={5} ariaLabel="Warehouse Summary Indicators">
+                <KpiCard
+                    title="Total Warehouses"
+                    value={dashboardLoading ? '...' : totalWarehouses}
+                    subtitle="Registered stock locations"
+                    subtitleColor="#64748b"
+                    icon={<BsBuildings />}
+                    accentColor="#6366f1"
+                    valueColor="#4338ca"
+                    loading={dashboardLoading}
+                    active={statusFilter === 'all'}
+                    tooltip="Show all warehouses"
+                    onClick={() => {
+                        setStatusFilter('all');
+                        fetchWarehouses({ statusFilter: 'all', page: 1 });
+                    }}
+                />
+                <KpiCard
+                    title="Active Warehouses"
+                    value={dashboardLoading ? '...' : activeWarehouses}
+                    subtitle="Operational & ready"
+                    subtitleColor="#059669"
+                    icon={<BsCheckCircleFill />}
+                    accentColor="#10b981"
+                    valueColor="#059669"
+                    loading={dashboardLoading}
+                    active={statusFilter === 'active'}
+                    tooltip="Click to filter active warehouses"
+                    onClick={() => {
+                        setStatusFilter('active');
+                        fetchWarehouses({ statusFilter: 'active', page: 1 });
+                    }}
+                />
+                <KpiCard
+                    title="Inactive Warehouses"
+                    value={dashboardLoading ? '...' : inactiveWarehouses}
+                    subtitle={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
+                    subtitleColor={Number(inactiveWarehouses) > 0 ? "#dc2626" : "#64748b"}
+                    icon={<BsExclamationTriangle />}
+                    accentColor={Number(inactiveWarehouses) > 0 ? "#ef4444" : "#64748b"}
+                    valueColor={Number(inactiveWarehouses) > 0 ? "#dc2626" : "#334155"}
+                    loading={dashboardLoading}
+                    active={statusFilter === 'inactive'}
+                    tooltip="Click to filter inactive warehouses"
+                    onClick={() => {
+                        setStatusFilter('inactive');
+                        fetchWarehouses({ statusFilter: 'inactive', page: 1 });
+                    }}
+                />
+                <KpiCard
+                    title="Total Stock Units"
+                    value={dashboardLoading ? '...' : totalStockUnits}
+                    subtitle="Units in warehouses"
+                    subtitleColor="#64748b"
+                    icon={<BsBoxSeam />}
+                    accentColor="#0284c7"
+                    valueColor="#0369a1"
+                    loading={dashboardLoading}
+                    tooltip="Total stock units across warehouses"
+                />
+                <KpiCard
+                    title="Total Stock Value"
+                    value={dashboardLoading ? '...' : totalStockValue}
+                    subtitle="Inventory valuation"
+                    subtitleColor="#64748b"
+                    icon={<BsCashStack />}
+                    accentColor="#7c3aed"
+                    valueColor="#6d28d9"
+                    loading={dashboardLoading}
+                    tooltip="Total inventory valuation"
+                />
+            </KpiGrid>
 
             {dashboardError && (
                 <div style={{
@@ -2173,106 +2204,121 @@ export const WarehousesPage = () => {
 
 
 
-            {/* Search and Filters Toolbar Container - Unified Single Horizontal Row */}
-            <div className="wh-toolbar-card">
-                <div className="wh-toolbar-container">
-                    <div className="wh-toolbar-row">
-                        {/* 1. Search Input: compact & balanced */}
-                        <form onSubmit={handleSearchSubmit} className="wh-search-form">
-                            <div className="wh-search-box">
-                                <BsSearch className="wh-search-icon" size={13} />
-                                <input
-                                    type="text"
-                                    className="wh-search-input"
-                                    placeholder="Search by name, code, location, ID..."
-                                    value={search}
-                                    onChange={(e) => {
-                                        setSearch(e.target.value);
-                                        setPage(1);
-                                    }}
-                                />
-                                {search && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSearch("");
-                                            setPage(1);
-                                            if (allWarehousesRef.current && allWarehousesRef.current.length > 0) {
-                                                setRawWarehouses(allWarehousesRef.current);
-                                            }
-                                        }}
-                                        title="Clear search"
-                                        className="wh-search-clear-btn"
-                                    >
-                                        <BsX size={14} />
-                                    </button>
-                                )}
-                            </div>
-                        </form>
-
-                        {/* 2. Store Filter Dropdown */}
-                        <div className="wh-filter-wrapper wh-store-filter-wrapper">
-                            <BsShop className="wh-filter-prefix-icon" size={13} />
-                            <select
-                                className={`wh-filter-select ${storeFilter !== 'all' ? 'is-active' : ''}`}
-                                value={storeFilter}
+            {/* Search and Filters Toolbar Container */}
+            <SectionCard
+                title="Search & Filter Warehouses"
+                subtitle="Filter stock locations by name, code, location, store or operational status"
+                icon={<BsFunnel />}
+                iconVariant="blue"
+            >
+                <div className="wh-toolbar-row">
+                    {/* 1. Search Input */}
+                    <form onSubmit={handleSearchSubmit} className="wh-search-form">
+                        <div className="wh-search-input-container">
+                            <SearchInput
+                                className="wh-search-input-wrap"
+                                placeholder="Search by name, code, location, ID..."
+                                value={search}
                                 onChange={(e) => {
-                                    const val = e.target.value;
-                                    setStoreFilter(val);
-                                    fetchWarehouses({ storeFilter: val, page: 1 });
+                                    setSearch(e.target.value);
+                                    setPage(1);
                                 }}
-                                aria-label="Filter by store"
-                            >
-                                <option value="all">All Stores</option>
-                                {storeOptions.map(st => (
-                                    <option key={st.id} value={st.id}>
-                                        Store #{st.id} {st.name && st.name !== `Store #${st.id}` ? `(${st.name})` : ''}
-                                    </option>
-                                ))}
-                            </select>
-                            <BsChevronDown size={11} className="wh-filter-select-icon" />
-                        </div>
-
-                        {/* 3. Status Filter Dropdown */}
-                        <div className="wh-filter-wrapper wh-status-filter-wrapper">
-                            <BsActivity className="wh-filter-prefix-icon" size={13} />
-                            <select
-                                className={`wh-filter-select ${statusFilter !== 'all' ? 'is-active' : ''}`}
-                                value={statusFilter}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    setStatusFilter(val);
-                                    fetchWarehouses({ statusFilter: val, page: 1 });
-                                }}
-                                aria-label="Filter by status"
-                            >
-                                <option value="all">All Status</option>
-                                <option value="active">Active Only</option>
-                                <option value="inactive">Inactive Only</option>
-                            </select>
-                            <BsChevronDown size={11} className="wh-filter-select-icon" />
-                        </div>
-
-                        {/* 4. Active Filters Indicator & Reset Button */}
-                        {hasActiveFilters && (
-                            <div className="wh-filter-actions-group">
-                                <div className="wh-active-filter-badge">
-                                    <BsFunnel size={11} />
-                                    <span>Filters Active</span>
-                                </div>
+                                icon={<BsSearch size={14} />}
+                            />
+                            {search && (
                                 <button
                                     type="button"
-                                    onClick={handleResetFilters}
-                                    className="wh-clear-btn"
-                                    title="Reset all filters to default"
+                                    onClick={() => {
+                                        setSearch("");
+                                        setPage(1);
+                                        if (allWarehousesRef.current && allWarehousesRef.current.length > 0) {
+                                            setRawWarehouses(allWarehousesRef.current);
+                                        }
+                                    }}
+                                    title="Clear search"
+                                    aria-label="Clear search"
+                                    className="wh-search-clear-btn"
                                 >
-                                    <BsX size={15} /> Reset Filters
+                                    <BsX size={14} />
                                 </button>
+                            )}
+                        </div>
+                    </form>
+
+                    {/* 2. Store Filter Dropdown */}
+                    <div className="wh-filter-wrapper wh-store-filter-wrapper">
+                        <BsShop className="wh-filter-prefix-icon" size={13} />
+                        <select
+                            className={`wh-filter-select ${storeFilter !== 'all' ? 'is-active' : ''}`}
+                            value={storeFilter}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setStoreFilter(val);
+                                fetchWarehouses({ storeFilter: val, page: 1 });
+                            }}
+                            aria-label="Filter by store"
+                        >
+                            <option value="all">All Stores</option>
+                            {storeOptions.map(st => (
+                                <option key={st.id} value={st.id}>
+                                    Store #{st.id} {st.name && st.name !== `Store #${st.id}` ? `(${st.name})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                        <BsChevronDown size={11} className="wh-filter-select-icon" />
+                    </div>
+
+                    {/* 3. Status Filter Dropdown */}
+                    <div className="wh-filter-wrapper wh-status-filter-wrapper">
+                        <BsActivity className="wh-filter-prefix-icon" size={13} />
+                        <select
+                            className={`wh-filter-select ${statusFilter !== 'all' ? 'is-active' : ''}`}
+                            value={statusFilter}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setStatusFilter(val);
+                                fetchWarehouses({ statusFilter: val, page: 1 });
+                            }}
+                            aria-label="Filter by status"
+                        >
+                            <option value="all">All Status</option>
+                            <option value="active">Active Only</option>
+                            <option value="inactive">Inactive Only</option>
+                        </select>
+                        <BsChevronDown size={11} className="wh-filter-select-icon" />
+                    </div>
+
+                    {/* 4. Filter & Reset Filters Buttons */}
+                    <div className="wh-filter-actions-group">
+                        {hasActiveFilters && (
+                            <div className="wh-active-filter-badge">
+                                <BsFunnel size={11} />
+                                <span>Filters Active</span>
                             </div>
                         )}
+                        <button
+                            type="button"
+                            onClick={handleSearchSubmit}
+                            className="adm-btn-primary wh-filter-btn"
+                            title="Apply search and filter criteria"
+                            aria-label="Filter warehouses"
+                        >
+                            <BsFilter size={14} />
+                            <span>Filter</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleResetFilters}
+                            className="adm-btn-secondary wh-reset-btn"
+                            title="Reset all filters to default"
+                            aria-label="Reset filters"
+                        >
+                            <BsX size={15} />
+                            <span>Reset Filters</span>
+                        </button>
                     </div>
                 </div>
-            </div>
+            </SectionCard>
 
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
@@ -2370,9 +2416,15 @@ export const WarehousesPage = () => {
             ) : (
                 <>
                     {viewMode === "table" ? (
-                    <div className="wh-table-card">
-                        <div className="warehouse-table-scroll custom-scrollbar">
-                            <table className="warehouse-table">
+                    <SectionCard
+                        title="Warehouses Directory"
+                        subtitle={`Showing ${filteredWarehouses.length} ${filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}${search.trim() ? ` matching "${search.trim()}"` : ''}`}
+                        icon={<BsBuildings />}
+                        iconVariant="blue"
+                        className="wh-table-section-card"
+                    >
+                        <div className="warehouse-table-scroll dashboard-table-wrap custom-scrollbar">
+                            <table className="warehouse-table dashboard-table">
                                 <colgroup>
                                     <col className="wh-col-code" style={{ width: '12%' }} />
                                     <col className="wh-col-name" style={{ width: '16%' }} />
@@ -2456,7 +2508,7 @@ export const WarehousesPage = () => {
                                                         onClick={() => handleToggleStatus(wh)}
                                                         disabled={togglingStatusId === wh.id}
                                                         title={togglingStatusId === wh.id ? "Updating status..." : `Click to change status to ${isActive ? 'Inactive' : 'Active'}`}
-                                                        className={`wh-status-pill ${isActive ? 'is-active' : 'is-inactive'}`}
+                                                        className={`status-pill wh-status-pill ${isActive ? 'status-badge-success is-active' : 'status-badge-danger is-inactive'}`}
                                                     >
                                                         {togglingStatusId === wh.id ? (
                                                             <>
@@ -2517,7 +2569,23 @@ export const WarehousesPage = () => {
                                 </tbody>
                             </table>
                         </div>
-                    </div>) : (
+                        {/* Warehouse Table Pagination Controls */}
+                        {!loading && filteredWarehouses.length > 0 && (
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                totalItems={filteredWarehouses.length}
+                                pageSize={pageSize}
+                                onPageChange={setPage}
+                                onPageSizeChange={(newSize) => {
+                                    setPageSize(newSize);
+                                    setPage(1);
+                                }}
+                                pageSizeOptions={[8, 10, 20, 50, 100]}
+                                itemLabel={filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
+                            />
+                        )}
+                    </SectionCard>) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
                         {paginatedWarehouses.map((wh, i) => {
                             const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
@@ -2678,64 +2746,21 @@ export const WarehousesPage = () => {
                     </div>
                 )}
                 
-                {/* Warehouse Table Pagination Controls */}
-                {!loading && filteredWarehouses.length > 0 && (
-                    <div className="wh-pagination-container">
-                        {/* Left side: Rows Per Page dropdown */}
-                        <div className="wh-pagination-left">
-                            <select
-                                className="wh-rows-per-page-select"
-                                value={pageSize}
-                                onChange={(e) => {
-                                    setPageSize(Number(e.target.value));
-                                    setPage(1);
-                                }}
-                                aria-label="Select rows per page"
-                            >
-                                <option value={8}>8</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                            </select>
-                        </div>
-
-                        {/* Center: Record count info */}
-                        <div className="wh-pagination-center">
-                            Showing <strong>{filteredWarehouses.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredWarehouses.length, page * pageSize)}</strong> of <strong>{filteredWarehouses.length}</strong> {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
-                            {search.trim() ? ` matching "${search.trim()}"` : ''}
-                        </div>
-
-                        {/* Right side: Page numbers (Previous and Next buttons completely removed) */}
-                        <div className="wh-pagination-right">
-                            {totalPages > 1 && (
-                                <div className="wh-page-numbers-group">
-                                    {getPageNumbers().map((p, idx) => {
-                                        if (p === '...') {
-                                            return (
-                                                <span key={`ellipsis-${idx}`} className="wh-page-ellipsis">
-                                                    …
-                                                </span>
-                                            );
-                                        }
-                                        const isActive = p === page;
-                                        return (
-                                            <button
-                                                key={p}
-                                                type="button"
-                                                className={`wh-page-btn wh-page-num-btn ${isActive ? 'is-active' : ''}`}
-                                                onClick={() => setPage(p)}
-                                                aria-label={`Page ${p}`}
-                                                aria-current={isActive ? 'page' : undefined}
-                                            >
-                                                {p}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                {/* Pagination for grid view */}
+                {viewMode !== "table" && !loading && filteredWarehouses.length > 0 && (
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        totalItems={filteredWarehouses.length}
+                        pageSize={pageSize}
+                        onPageChange={setPage}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setPage(1);
+                        }}
+                        pageSizeOptions={[8, 10, 20, 50, 100]}
+                        itemLabel={filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
+                    />
                 )}
             </>
         )}
@@ -4040,8 +4065,7 @@ export const WarehousesPage = () => {
                     </div>
                 </div>
             )}
-                    </div>
-        </div>
+        </PageContainer>
     );
 };
 
@@ -6217,49 +6241,34 @@ export const GRNPage = () => {
 
     const renderStatusBadge = (statusStr) => {
         const s = String(statusStr || '').toLowerCase();
-        let bg = '#ecfdf5';
-        let border = '#a7f3d0';
-        let color = '#065f46';
+        let variant = 'success';
         let dot = '#10b981';
         let label = statusStr || 'Pending';
 
         if (s === 'received') {
-            bg = '#ecfdf5';
-            border = '#a7f3d0';
-            color = '#065f46';
+            variant = 'success';
             dot = '#10b981';
             label = 'Received';
         } else if (s === 'rejected' || s.includes('damage') || s.includes('discrepancy')) {
-            bg = '#fff1f2';
-            border = '#fecdd3';
-            color = '#9f1239';
+            variant = 'danger';
             dot = '#ef4444';
             label = 'Rejected';
         } else if (s === 'pending' || s === 'draft') {
-            bg = '#fffbeb';
-            border = '#fde68a';
-            color = '#92400e';
+            variant = 'warning';
             dot = '#f59e0b';
             label = 'Pending';
         }
 
         return (
-            <span style={{
-                padding: '4px 10px',
-                borderRadius: 9999,
-                fontSize: 12,
-                fontWeight: 700,
-                background: bg,
-                border: `1px solid ${border}`,
-                color: color,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                letterSpacing: '0.01em'
-            }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot }} />
-                {label}
-            </span>
+            <StatusBadge
+                variant={variant}
+                label={
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot }} />
+                        <span>{label}</span>
+                    </span>
+                }
+            />
         );
     };
 
@@ -6332,25 +6341,41 @@ export const GRNPage = () => {
     return (
         <div className="grn-page-root" style={{ width: '100%', minHeight: '100%' }}>
             <style>{`
-                /* GRN Page Full-Width & External Whitespace Elimination */
+                /* GRN Page Full-Width & Dashboard Layout Alignment */
                 .grn-page-root {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    box-sizing: border-box !important;
+                    width: 100%;
+                    max-width: 100%;
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
                 }
-                .grn-page-root > div {
-                    max-width: 100% !important;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 20px 24px !important;
-                    box-sizing: border-box !important;
+                .grn-page-root .grn-search-input-container {
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    width: 320px;
+                    max-width: 100%;
                 }
-                @media (max-width: 768px) {
-                    .grn-page-root > div {
-                        padding: 14px 16px !important;
-                    }
+                .grn-page-root .grn-search-input-wrap {
+                    width: 100%;
+                }
+                .grn-page-root .grn-search-input-wrap .search-input-field {
+                    height: 38px;
+                    padding-right: 32px;
+                    font-size: 13px;
+                }
+                .grn-page-root .grn-table-container {
+                    max-height: 600px;
+                    overflow-x: auto;
+                    overflow-y: auto;
+                    border-radius: 10px;
+                    border: 1px solid #e2e8f0;
+                }
+                .grn-page-root .grn-table thead th {
+                    position: sticky;
+                    top: 0;
+                    background: #fafafa;
+                    z-index: 2;
                 }
 
                 /* Page-level and table custom scrollbars */
@@ -6903,33 +6928,29 @@ export const GRNPage = () => {
                 subtitle="Inspect, inward physical shipments against purchase orders, and verify batch/expiry dates"
                 icon={<BsTruck />}
             actionBtn={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <>
                     <button
                         type="button"
+                        className="adm-btn-secondary"
                         onClick={handleExportCsv}
                         disabled={exportLoading}
                         title="Export GRN records to CSV"
-                        style={{
-                            background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', padding: '10px 16px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: exportLoading ? 'not-allowed' : 'pointer',
-                            display: 'flex', alignItems: 'center', gap: 6,
-                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                            opacity: exportLoading ? 0.7 : 1
-                        }}
+                        aria-label="Export GRN records to CSV"
                     >
-                        <BsDownload size={15} /> {exportLoading ? 'Exporting...' : 'Export CSV'}
+                        <BsDownload size={15} />
+                        <span>{exportLoading ? 'Exporting...' : 'Export CSV'}</span>
                     </button>
                     <button
+                        type="button"
+                        className="adm-btn-primary"
                         onClick={handleOpenCreateModal}
-                        style={{
-                            background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                            boxShadow: '0 2px 4px rgba(99, 102, 241, 0.2)'
-                        }}
+                        title="Create Inward GRN"
+                        aria-label="Create Inward GRN"
                     >
-                        <BsPlus size={18} /> Create Inward GRN
+                        <BsPlus size={18} />
+                        <span>Create Inward GRN</span>
                     </button>
-                </div>
+                </>
             }
         >
             {/* Success Banners */}
@@ -7096,60 +7117,86 @@ export const GRNPage = () => {
             )}
 
             {/* Stat Cards strictly mapped from GET /api/v1/grn/stats */}
-            <div className="grn-stat-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
-                <GrnStatCard
-                    label="Total GRNs"
+            <KpiGrid columns={6} ariaLabel="GRN Summary Indicators">
+                <KpiCard
+                    title="Total GRNs"
                     value={statsLoading ? '...' : String(stats?.total_grns ?? 0)}
-                    sub="Recorded in Retail OS"
-                    icon={<BsTruck size={17} />}
-                    iconBg="#eef2ff"
-                    iconColor="#4f46e5"
+                    subtitle="Recorded in Retail OS"
+                    subtitleColor="#64748b"
+                    icon={<BsTruck />}
+                    accentColor="#6366f1"
+                    valueColor="#4338ca"
+                    loading={statsLoading}
+                    active={!filterStatus || filterStatus === 'all'}
+                    tooltip="Show all GRNs"
+                    onClick={() => handleFilterChange('status', '')}
                 />
-                <GrnStatCard
-                    label="Pending GRNs"
+                <KpiCard
+                    title="Pending GRNs"
                     value={statsLoading ? '...' : String(stats?.pending_grns ?? 0)}
-                    sub="Awaiting inspection"
-                    icon={<BsClockHistory size={17} />}
-                    iconBg="#fffbeb"
-                    iconColor="#d97706"
+                    subtitle="Awaiting inspection"
+                    subtitleColor="#d97706"
+                    icon={<BsClockHistory />}
+                    accentColor="#f59e0b"
+                    valueColor="#d97706"
+                    loading={statsLoading}
+                    active={filterStatus === 'pending'}
+                    tooltip="Click to filter pending GRNs"
+                    onClick={() => handleFilterChange('status', 'pending')}
                 />
-                <GrnStatCard
-                    label="Received GRNs"
+                <KpiCard
+                    title="Received GRNs"
                     value={statsLoading ? '...' : String(stats?.received_grns ?? 0)}
-                    sub="Inwarded to stock"
-                    icon={<BsCheckCircle size={17} />}
-                    iconBg="#ecfdf5"
-                    iconColor="#059669"
+                    subtitle="Inwarded to stock"
+                    subtitleColor="#059669"
+                    icon={<BsCheckCircle />}
+                    accentColor="#10b981"
+                    valueColor="#059669"
+                    loading={statsLoading}
+                    active={filterStatus === 'received'}
+                    tooltip="Click to filter received GRNs"
+                    onClick={() => handleFilterChange('status', 'received')}
                 />
-                <GrnStatCard
-                    label="Rejected GRNs"
+                <KpiCard
+                    title="Rejected GRNs"
                     value={statsLoading ? '...' : String(stats?.rejected_grns ?? 0)}
-                    sub="Discrepancies / damages"
-                    icon={<BsXCircle size={17} />}
-                    iconBg="#fff1f2"
-                    iconColor="#e11d48"
+                    subtitle="Discrepancies / damages"
+                    subtitleColor="#e11d48"
+                    icon={<BsXCircle />}
+                    accentColor="#ef4444"
+                    valueColor="#dc2626"
+                    loading={statsLoading}
+                    active={filterStatus === 'rejected'}
+                    tooltip="Click to filter rejected GRNs"
+                    onClick={() => handleFilterChange('status', 'rejected')}
                 />
-                <GrnStatCard
-                    label="Received Today"
+                <KpiCard
+                    title="Received Today"
                     value={statsLoading ? '...' : String(stats?.received_today ?? 0)}
-                    sub="Shipments arrived today"
-                    icon={<BsCalendarCheck size={17} />}
-                    iconBg="#f0f9ff"
-                    iconColor="#0284c7"
+                    subtitle="Shipments arrived today"
+                    subtitleColor="#0284c7"
+                    icon={<BsCalendarCheck />}
+                    accentColor="#0284c7"
+                    valueColor="#0369a1"
+                    loading={statsLoading}
+                    tooltip="Shipments arrived today"
                 />
-                <GrnStatCard
-                    label="Total Inward Value"
+                <KpiCard
+                    title="Total Inward Value"
                     value={statsLoading ? '...' : (
                         stats?.total_inward_value != null
                             ? `₹${Number(stats.total_inward_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                             : '₹0.00'
                     )}
-                    sub="Cumulative inventory cost"
-                    icon={<BsCashStack size={17} />}
-                    iconBg="#f5f3ff"
-                    iconColor="#7c3aed"
+                    subtitle="Cumulative inventory cost"
+                    subtitleColor="#64748b"
+                    icon={<BsCashStack />}
+                    accentColor="#7c3aed"
+                    valueColor="#6d28d9"
+                    loading={statsLoading}
+                    tooltip="Total inward inventory value"
                 />
-            </div>
+            </KpiGrid>
 
             {/* Error Banners */}
             {error && (
@@ -7205,55 +7252,56 @@ export const GRNPage = () => {
                 </div>
             )}
 
-            {/* Main GRN Table Container */}
-            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', overflow: 'hidden' }}>
-                {/* Filter Bar with search and supported query parameters */}
-                <div className="grn-toolbar-container">
+            {/* Search & Filter Section */}
+            <SectionCard
+                title="Search & Filter GRNs"
+                subtitle="Filter receipts by GRN #, PO reference, warehouse, store, supplier or status"
+                icon={<BsFunnel />}
+                iconVariant="blue"
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                         {/* Search Input: query param `search` */}
-                        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, width: 320, maxWidth: '100%', margin: 0 }}>
-                            <div style={{ position: 'relative', width: '100%' }}>
-                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b', pointerEvents: 'none' }} size={13} />
-                                <input
-                                    type="text"
-                                    className="grn-search-input"
-                                    placeholder="Search GRN #, invoice, PO #..."
-                                    value={search}
-                                    onChange={e => setSearch(e.target.value)}
-                                />
-                                {search && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSearch('');
-                                            fetchGrnData({ search: '' });
-                                        }}
-                                        title="Clear search"
-                                        style={{
-                                            position: 'absolute',
-                                            right: 8,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            background: '#e2e8f0',
-                                            border: 'none',
-                                            borderRadius: '50%',
-                                            width: 18,
-                                            height: 18,
-                                            cursor: 'pointer',
-                                            color: '#475569',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            padding: 0,
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#475569'; }}
-                                    >
-                                        <BsX size={14} />
-                                    </button>
-                                )}
-                            </div>
+                        <form onSubmit={handleSearchSubmit} className="grn-search-input-container" style={{ margin: 0 }}>
+                            <SearchInput
+                                className="grn-search-input-wrap"
+                                placeholder="Search GRN #, invoice, PO #..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                icon={<BsSearch size={14} />}
+                                aria-label="Search GRNs"
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearch('');
+                                        fetchGrnData({ search: '' });
+                                    }}
+                                    title="Clear search"
+                                    aria-label="Clear search"
+                                    style={{
+                                        position: 'absolute',
+                                        right: 8,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: '#e2e8f0',
+                                        border: 'none',
+                                        borderRadius: '50%',
+                                        width: 18,
+                                        height: 18,
+                                        cursor: 'pointer',
+                                        color: '#475569',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: 0,
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsX size={14} />
+                                </button>
+                            )}
                         </form>
 
                         {/* Active Filters Summary & Clear Filters */}
@@ -7278,7 +7326,7 @@ export const GRNPage = () => {
                                     <button
                                         type="button"
                                         onClick={handleResetFilters}
-                                        className="grn-clear-btn"
+                                        className="adm-btn-secondary"
                                         title="Reset all filters to default"
                                     >
                                         <BsX size={16} /> Reset Filters
@@ -7398,6 +7446,15 @@ export const GRNPage = () => {
                         </div>
                     </div>
                 </div>
+            </SectionCard>
+
+            {/* Main GRN Table Card */}
+            <SectionCard
+                title="Goods Received Notes"
+                subtitle={`Showing ${grns.length} ${grns.length === 1 ? 'GRN record' : 'GRN records'}`}
+                icon={<BsTruck />}
+                iconVariant="blue"
+            >
 
                 {loading ? (
                     <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
@@ -7441,20 +7498,20 @@ export const GRNPage = () => {
                         )}
                     </div>
                 ) : (
-                    <div className="grn-table-container" style={{ overflowX: 'auto' }}>
-                        <table className="grn-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                            <thead style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569' }}>
+                    <div className="grn-table-container dashboard-table-wrap">
+                        <table className="grn-table dashboard-table" style={{ width: '100%', minWidth: '1120px' }}>
+                            <thead>
                                 <tr>
-                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GRN #</th>
-                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PO Reference</th>
-                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Supplier</th>
-                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Warehouse / Store</th>
-                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice</th>
-                                    <th style={{ padding: '13px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Items / Quantities</th>
-                                    <th style={{ padding: '13px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Value</th>
-                                    <th style={{ padding: '13px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
-                                    <th style={{ padding: '13px 16px', textAlign: 'center', minWidth: 335, whiteSpace: 'nowrap', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
+                                    <th>GRN #</th>
+                                    <th>PO Reference</th>
+                                    <th>Supplier</th>
+                                    <th>Warehouse / Store</th>
+                                    <th>Invoice</th>
+                                    <th style={{ textAlign: 'right' }}>Items / Quantities</th>
+                                    <th style={{ textAlign: 'right' }}>Total Value</th>
+                                    <th style={{ textAlign: 'center' }}>Status</th>
+                                    <th>Date</th>
+                                    <th style={{ textAlign: 'center', minWidth: 335, whiteSpace: 'nowrap' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -7703,136 +7760,21 @@ export const GRNPage = () => {
 
                 {/* GRN List Pagination Controls */}
                 {!loading && grns.length > 0 && (
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr auto 1fr',
-                        alignItems: 'center',
-                        padding: '14px 20px',
-                        borderTop: '1px solid #e2e8f0',
-                        background: '#ffffff',
-                        gap: 12
-                    }}>
-                        {/* Left: Rows Per Page Selector (Dropdown only, no label) */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
-                            <select
-                                value={pageSize}
-                                onChange={(e) => {
-                                    setPageSize(Number(e.target.value));
-                                    setCurrentPage(1);
-                                }}
-                                style={{
-                                    height: 32,
-                                    padding: '0 10px',
-                                    border: '1.5px solid #cbd5e1',
-                                    borderRadius: 6,
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    background: '#ffffff',
-                                    color: '#0f172a',
-                                    outline: 'none',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                aria-label="Select rows per page"
-                            >
-                                <option value={5}>5</option>
-                                <option value={8}>8</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                            </select>
-                        </div>
-
-                        {/* Center: Pagination Information */}
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            justifySelf: 'center',
-                            fontSize: 13,
-                            color: '#64748b',
-                            fontWeight: 500,
-                            whiteSpace: 'nowrap',
-                            textAlign: 'center'
-                        }}>
-                            Showing{' '}
-                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
-                                {grns.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
-                            </strong>{' '}
-                            to{' '}
-                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
-                                {Math.min(grns.length, currentPage * pageSize)}
-                            </strong>{' '}
-                            of{' '}
-                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
-                                {grns.length}
-                            </strong>{' '}
-                            {grns.length === 1 ? 'GRN' : 'GRNs'}
-                        </div>
-
-                        {/* Right: Page Navigation Controls (Page numbers with active highlight) */}
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'flex-end',
-                            justifySelf: 'end',
-                            gap: 6
-                        }}>
-                            {getPageNumbers().map((p, idx) => {
-                                if (p === '...') {
-                                    return (
-                                        <span
-                                            key={`ellipsis-${idx}`}
-                                            style={{
-                                                minWidth: 28,
-                                                height: 34,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: '#94a3b8',
-                                                fontSize: 13,
-                                                fontWeight: 600
-                                            }}
-                                        >
-                                            …
-                                        </span>
-                                    );
-                                }
-                                const isActive = p === currentPage;
-                                return (
-                                    <button
-                                        key={p}
-                                        type="button"
-                                        onClick={() => setCurrentPage(p)}
-                                        style={{
-                                            minWidth: 34,
-                                            height: 34,
-                                            padding: '0 8px',
-                                            borderRadius: 8,
-                                            border: isActive ? '1.5px solid #4f46e5' : '1.5px solid #cbd5e1',
-                                            background: isActive ? '#4f46e5' : '#ffffff',
-                                            color: isActive ? '#ffffff' : '#334155',
-                                            fontSize: 12.5,
-                                            fontWeight: 700,
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            boxShadow: isActive ? '0 2px 6px rgba(79, 70, 229, 0.28)' : 'none',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        aria-current={isActive ? 'page' : undefined}
-                                        aria-label={`Page ${p}`}
-                                    >
-                                        {p}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    <Pagination
+                        page={currentPage}
+                        totalPages={totalPages}
+                        totalItems={grns.length}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setCurrentPage(1);
+                        }}
+                        pageSizeOptions={[5, 8, 10, 20, 50, 100]}
+                        itemLabel={grns.length === 1 ? 'GRN' : 'GRNs'}
+                    />
                 )}
-            </div>
+            </SectionCard>
 
             {/* CREATE INWARD GRN MODAL */}
             {isCreateModalOpen && (
@@ -10802,23 +10744,29 @@ export const StoreTransfersPage = () => {
             subtitle="Transfer products between retail outlets, generate gate passes and track in-transit stock"
             icon={<BsArrowLeftRight />}
             actionBtn={
-                <div className="st-header-actions">
+                <>
                     <button
+                        type="button"
                         onClick={handleRefresh}
                         disabled={loading}
                         title="Refresh Transfers & Summary Analytics"
-                        className="st-header-btn st-header-btn-refresh"
+                        aria-label="Refresh Transfers & Summary Analytics"
+                        className="adm-btn-secondary"
                     >
-                        <BsArrowRepeat size={16} /> {loading ? "Refreshing..." : "Refresh"}
+                        <BsArrowRepeat size={15} className={loading ? "wh-spin" : ""} />
+                        <span>{loading ? "Refreshing..." : "Refresh"}</span>
                     </button>
                     <button
                         type="button"
                         onClick={() => setIsCreateModalOpen(true)}
-                        className="st-header-btn st-header-btn-create"
+                        title="Request Stock Transfer"
+                        aria-label="Request Stock Transfer"
+                        className="adm-btn-primary"
                     >
-                        <BsPlus size={18} /> Request Stock Transfer
+                        <BsPlus size={18} />
+                        <span>Request Stock Transfer</span>
                     </button>
-                </div>
+                </>
             }
         >
             {/* Create Success Banner */}
@@ -11253,6 +11201,106 @@ export const StoreTransfersPage = () => {
 
 
 
+            {/* Summary KPI Cards */}
+            <KpiGrid columns={6} ariaLabel="Store Transfer Summary Indicators">
+                <KpiCard
+                    title="Total Transfers"
+                    value={loading && safeTransfers.length === 0 ? '...' : safeTransfers.length.toLocaleString('en-IN')}
+                    subtitle="All store transfers"
+                    subtitleColor="#64748b"
+                    icon={<BsArrowLeftRight />}
+                    accentColor="#6366f1"
+                    valueColor="#4338ca"
+                    loading={loading && safeTransfers.length === 0}
+                    active={statusFilter === 'all'}
+                    tooltip="Show all transfers"
+                    onClick={() => {
+                        setStatusFilter('all');
+                        setPage(1);
+                    }}
+                />
+                <KpiCard
+                    title="Pending"
+                    value={loading && safeTransfers.length === 0 ? '...' : pendingTransfersVal.toLocaleString('en-IN')}
+                    subtitle="Awaiting approval"
+                    subtitleColor="#d97706"
+                    icon={<BsClockHistory />}
+                    accentColor="#f59e0b"
+                    valueColor="#d97706"
+                    loading={loading && safeTransfers.length === 0}
+                    active={statusFilter === 'Pending'}
+                    tooltip="Click to filter pending transfers"
+                    onClick={() => {
+                        setStatusFilter('Pending');
+                        setPage(1);
+                    }}
+                />
+                <KpiCard
+                    title="Approved"
+                    value={loading && safeTransfers.length === 0 ? '...' : approvedTransfersVal.toLocaleString('en-IN')}
+                    subtitle="Ready to dispatch"
+                    subtitleColor="#2563eb"
+                    icon={<BsCheckCircle />}
+                    accentColor="#2563eb"
+                    valueColor="#1d4ed8"
+                    loading={loading && safeTransfers.length === 0}
+                    active={statusFilter === 'Approved'}
+                    tooltip="Click to filter approved transfers"
+                    onClick={() => {
+                        setStatusFilter('Approved');
+                        setPage(1);
+                    }}
+                />
+                <KpiCard
+                    title="Dispatched"
+                    value={loading && safeTransfers.length === 0 ? '...' : dispatchedTransfersVal.toLocaleString('en-IN')}
+                    subtitle="In transit"
+                    subtitleColor="#7c3aed"
+                    icon={<BsTruck />}
+                    accentColor="#7c3aed"
+                    valueColor="#6d28d9"
+                    loading={loading && safeTransfers.length === 0}
+                    active={statusFilter === 'Dispatched'}
+                    tooltip="Click to filter dispatched transfers"
+                    onClick={() => {
+                        setStatusFilter('Dispatched');
+                        setPage(1);
+                    }}
+                />
+                <KpiCard
+                    title="Received"
+                    value={loading && safeTransfers.length === 0 ? '...' : receivedTransfersVal.toLocaleString('en-IN')}
+                    subtitle="Completed transfers"
+                    subtitleColor="#059669"
+                    icon={<BsBoxSeam />}
+                    accentColor="#10b981"
+                    valueColor="#059669"
+                    loading={loading && safeTransfers.length === 0}
+                    active={statusFilter === 'Received'}
+                    tooltip="Click to filter received transfers"
+                    onClick={() => {
+                        setStatusFilter('Received');
+                        setPage(1);
+                    }}
+                />
+                <KpiCard
+                    title="Rejected"
+                    value={loading && safeTransfers.length === 0 ? '...' : rejectedTransfersVal.toLocaleString('en-IN')}
+                    subtitle="Declined requests"
+                    subtitleColor="#dc2626"
+                    icon={<BsXCircle />}
+                    accentColor="#ef4444"
+                    valueColor="#dc2626"
+                    loading={loading && safeTransfers.length === 0}
+                    active={statusFilter === 'Rejected'}
+                    tooltip="Click to filter rejected transfers"
+                    onClick={() => {
+                        setStatusFilter('Rejected');
+                        setPage(1);
+                    }}
+                />
+            </KpiGrid>
+
             {/* Store Transfer Analytics & Insights (from GET /api/v1/store-transfers/summary) */}
             {summary && (
                 <div className="st-analytics-panel">
@@ -11433,18 +11481,40 @@ export const StoreTransfersPage = () => {
             )}
 
             {/* Search, Store Selector & Status Filter Toolbar */}
-            <div className="st-toolbar-card">
+            <SectionCard
+                title="Search & Filter Transfers"
+                subtitle="Search by transfer #, store, product, SKU, or approver and filter by store or status"
+                icon={<BsFilter />}
+                iconVariant="blue"
+            >
                 <div className="st-toolbar-controls">
                     {/* Search Input */}
-                    <div className="st-search-box">
-                        <BsSearch size={14} className="st-search-icon" />
-                        <input
-                            type="text"
+                    <div className="st-search-input-container">
+                        <SearchInput
+                            className="st-search-input-wrap"
                             placeholder="Search by transfer #, store, product, SKU, or approver..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="st-search-input"
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setPage(1);
+                            }}
+                            icon={<BsSearch size={14} />}
+                            aria-label="Search store transfers"
                         />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                className="st-search-clear-btn"
+                                onClick={() => {
+                                    setSearchTerm('');
+                                    setPage(1);
+                                }}
+                                title="Clear search"
+                                aria-label="Clear search"
+                            >
+                                <BsX size={14} />
+                            </button>
+                        )}
                     </div>
 
                     {/* Store Selector (Dynamic from stores list, no hardcoded store_id=1) */}
@@ -11475,7 +11545,10 @@ export const StoreTransfersPage = () => {
                         <select
                             id="st-status-filter"
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
+                            onChange={(e) => {
+                                setStatusFilter(e.target.value);
+                                setPage(1);
+                            }}
                             className="st-filter-select"
                         >
                             <option value="all">All Status ({safeTransfers.length})</option>
@@ -11486,17 +11559,35 @@ export const StoreTransfersPage = () => {
                             <option value="Rejected">Rejected ({rejectedTransfersVal})</option>
                         </select>
                     </div>
-                </div>
 
-                <span className="st-toolbar-badge">
-                    Store Transfer Directory
-                </span>
-            </div>
+                    {(searchTerm || selectedStoreId !== 'all' || statusFilter !== 'all') && (
+                        <button
+                            type="button"
+                            className="adm-btn-secondary st-reset-btn"
+                            onClick={() => {
+                                setSearchTerm('');
+                                setSelectedStoreId('all');
+                                setStatusFilter('all');
+                                setPage(1);
+                            }}
+                            title="Reset all filters"
+                        >
+                            <BsArrowRepeat size={13} />
+                            <span>Reset</span>
+                        </button>
+                    )}
+                </div>
+            </SectionCard>
 
             {/* Store Transfers Table Container */}
-            <div className="store-transfers-table-card">
-                <div className="store-transfers-table-container custom-scrollbar">
-                    <table className="store-transfers-table">
+            <SectionCard
+                title="Store Transfer Directory"
+                subtitle={`Showing ${filteredTransfers.length} ${filteredTransfers.length === 1 ? 'transfer' : 'transfers'}`}
+                icon={<BsArrowLeftRight />}
+                iconVariant="blue"
+            >
+                <div className="store-transfers-table-container dashboard-table-wrap custom-scrollbar">
+                    <table className="store-transfers-table dashboard-table">
                         <colgroup>
                             <col className="st-col-tr-num" style={{ width: '10%' }} />
                             <col className="st-col-src-store" style={{ width: '11%' }} />
@@ -11661,10 +11752,25 @@ export const StoreTransfersPage = () => {
 
                                             {/* Status Badge */}
                                             <td className="st-col-status st-td-center">
-                                                <span className={`st-status-badge st-status-${statusNorm}`}>
-                                                    <span className="st-status-dot" />
-                                                    <span>{statusRaw}</span>
-                                                </span>
+                                                <StatusBadge
+                                                    variant={
+                                                        statusNorm === 'received'
+                                                            ? 'success'
+                                                            : statusNorm === 'approved' || statusNorm === 'dispatched'
+                                                            ? 'info'
+                                                            : statusNorm === 'pending'
+                                                            ? 'warning'
+                                                            : statusNorm === 'rejected'
+                                                            ? 'danger'
+                                                            : 'neutral'
+                                                    }
+                                                    label={
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                                            <span className="st-status-dot" />
+                                                            <span>{statusRaw}</span>
+                                                        </span>
+                                                    }
+                                                />
                                             </td>
 
                                             {/* Created Date */}
@@ -11865,78 +11971,24 @@ export const StoreTransfersPage = () => {
                     </tbody>
                 </table>
                 </div>
-            </div>
 
-            {/* Pagination Toolbar */}
-            {!loading && filteredTransfers.length > 0 && (
-                <div className="store-transfers-pagination-footer">
-                    {/* Left side: Rows Per Page dropdown (no label) */}
-                    <div className="store-transfers-pagination-left">
-                        <select
-                            className="st-page-size-select"
-                            value={pageSize}
-                            onChange={(e) => {
-                                setPageSize(Number(e.target.value));
-                                setPage(1);
-                            }}
-                            aria-label="Select rows per page"
-                        >
-                            <option value={8}>8</option>
-                            <option value={10}>10</option>
-                            <option value={20}>20</option>
-                            <option value={50}>50</option>
-                            <option value={100}>100</option>
-                        </select>
-                    </div>
-
-                    {/* Middle: Centered Record Count */}
-                    <div className="store-transfers-pagination-center">
-                        Showing <strong>{filteredTransfers.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredTransfers.length, page * pageSize)}</strong> of <strong>{filteredTransfers.length}</strong> {filteredTransfers.length === 1 ? 'record' : 'records'}
-                    </div>
-
-                    {/* Right side: Page Navigation Controls (Page numbers with active page highlighted, no Previous/Next) */}
-                    <div className="store-transfers-pagination-right">
-                        <div className="st-page-numbers-group">
-                            {(() => {
-                                let pages = [];
-                                if (totalPages <= 7) {
-                                    pages = Array.from({ length: totalPages }, (_, i) => i + 1);
-                                } else {
-                                    if (page <= 4) {
-                                        pages = [1, 2, 3, 4, 5, '...', totalPages];
-                                    } else if (page >= totalPages - 3) {
-                                        pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-                                    } else {
-                                        pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
-                                    }
-                                }
-                                return pages.map((p, idx) => {
-                                    if (p === '...') {
-                                        return (
-                                            <span key={`ellipsis-${idx}`} className="st-page-ellipsis">
-                                                …
-                                            </span>
-                                        );
-                                    }
-                                    const isActive = p === page;
-                                    return (
-                                        <button
-                                            key={p}
-                                            type="button"
-                                            onClick={() => setPage(p)}
-                                            className={`st-page-btn st-page-num-btn ${isActive ? 'is-active' : ''}`}
-                                            aria-label={`Page ${p}`}
-                                            aria-current={isActive ? 'page' : undefined}
-                                        >
-                                            {p}
-                                        </button>
-                                    );
-                                });
-                            })()}
-                        </div>
-                    </div>
-                </div>
-            )}
+                {/* Pagination Toolbar */}
+                {!loading && filteredTransfers.length > 0 && (
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        totalItems={filteredTransfers.length}
+                        pageSize={pageSize}
+                        onPageChange={setPage}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setPage(1);
+                        }}
+                        pageSizeOptions={[8, 10, 20, 50, 100]}
+                        itemLabel={filteredTransfers.length === 1 ? 'record' : 'records'}
+                    />
+                )}
+            </SectionCard>
 
             {/* CREATE STOCK TRANSFER MODAL */}
             <TransferStockModal

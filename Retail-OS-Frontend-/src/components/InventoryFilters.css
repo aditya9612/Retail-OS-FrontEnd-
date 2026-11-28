@@ -67,12 +67,15 @@
   align-items: flex-end;
   gap: 12px;
   width: 100%;
+  max-width: 100%;
   flex-wrap: wrap;
+  box-sizing: border-box;
 }
 
 .inventory-filters .filter-group {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 165px;
+  min-width: 150px;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -80,9 +83,21 @@
   box-sizing: border-box;
 }
 
+.inventory-filters .filter-group.search-product-group {
+  flex: 1.8 1 240px;
+  min-width: 210px;
+}
+
 .inventory-filters .filter-group.filter-action-group {
   flex: 0 0 auto;
   min-width: auto;
+}
+
+.inventory-filters .filter-actions-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .inventory-filters .filter-group .filter-action-label {

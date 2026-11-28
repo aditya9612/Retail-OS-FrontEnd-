@@ -8,6 +8,9 @@ export {
     KpiCard,
     PageToolbar,
     SearchInput,
-    DataTable
+    DataTable,
+    SectionCard,
+    StatusBadge,
+    Pagination
 } from './PageComponents';
 

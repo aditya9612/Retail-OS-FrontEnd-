@@ -1,5 +1,6 @@
 import React from "react";
 import "./InventoryTable.css";
+import { StatusBadge } from "./Common";
 
 import {
   PackagePlus,
@@ -10,8 +11,6 @@ import {
 
 import {
   BsBoxSeam,
-  BsEye,
-  BsClockHistory,
 } from "react-icons/bs";
 
 const MRP_FIELD_NAMES = [
@@ -110,9 +109,6 @@ const InventoryTable = ({
   onHistory,
   onAdjust,
 }) => {
-  console.log("PAGINATED INSIDE TABLE =>", paginated);
-  console.log("PAGINATED LENGTH =>", paginated?.length);
-
   /* =========================================================
      EXPIRY STATUS
   ========================================================= */
@@ -208,9 +204,21 @@ const InventoryTable = ({
     return date.toLocaleDateString("en-IN");
   };
 
+  if (!paginated || paginated.length === 0) {
+    return (
+      <div className="empty-state-card inv-empty-state">
+        <BsBoxSeam className="empty-state-icon" />
+        <p className="empty-state-title">No inventory items found</p>
+        <p className="empty-state-sub">
+          Try adjusting your search or filter criteria, or add new stock to get started.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="inventory-table-container">
-      <table className="inventory-table">
+    <div className="inventory-table-container dashboard-table-wrap">
+      <table className="inventory-table dashboard-table">
         <thead>
           <tr>
             <th>Product</th>
@@ -222,19 +230,16 @@ const InventoryTable = ({
             <th>Available Qty</th>
             <th>Reorder Level</th>
             <th>Expiry Date</th>
-            <th>MRP PRICE</th>
-            <th>Selling Price</th>
-            <th>Margin</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th style={{ textAlign: "right" }}>MRP Price</th>
+            <th style={{ textAlign: "right" }}>Selling Price</th>
+            <th style={{ textAlign: "right" }}>Margin</th>
+            <th style={{ textAlign: "center" }}>Status</th>
+            <th style={{ textAlign: "center" }}>Actions</th>
           </tr>
         </thead>
 
         <tbody>
-          {paginated?.map((item, idx) => {
-            console.log("TABLE ITEM =>", item);
-            console.log("Product Name =>", item.name);
-            console.log("SKU =>", item.sku);
+          {paginated.map((item, idx) => {
 
             /* =====================================================
                PRODUCT
@@ -551,49 +556,22 @@ const isMissingRequiredExpiry =
                 ================================================= */}
 
                 <td>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
+                  <div>
                     <div
                       style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 8,
-                        background: "#f3f4f6",
-                        display: "flex",
-                        alignItems:
-                          "center",
-                        justifyContent:
-                          "center",
+                        fontWeight: 600,
                       }}
                     >
-                      <BsBoxSeam
-                        size={14}
-                        color="#9ca3af"
-                      />
+                      {name}
                     </div>
 
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                        }}
-                      >
-                        {name}
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "#6b7280",
-                        }}
-                      >
-                        {brand} • {storeName}
-                      </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#6b7280",
+                      }}
+                    >
+                      {brand} • {storeName}
                     </div>
                   </div>
                 </td>
@@ -781,24 +759,19 @@ const isMissingRequiredExpiry =
                    STOCK STATUS
                 ================================================= */}
 
-                <td>
-                  <span
-                    style={{
-                      display:
-                        "inline-flex",
-                      alignItems:
-                        "center",
-                      padding:
-                        "4px 10px",
-                      borderRadius: "20px",
-                      background: st.bg,
-                      color: st.color,
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {st.label}
-                  </span>
+                <td style={{ textAlign: "center" }}>
+                  <StatusBadge
+                    label={st.label}
+                    variant={
+                      st.label === "In Stock"
+                        ? "success"
+                        : st.label === "Low Stock"
+                        ? "warning"
+                        : st.label === "At Reorder"
+                        ? "info"
+                        : "danger"
+                    }
+                  />
                 </td>
 
                 {/* =================================================

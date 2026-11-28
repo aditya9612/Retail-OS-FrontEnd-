@@ -23,6 +23,15 @@ import {
 } from "react-icons/bs";
 
 import { supplier as supplierService } from "../../services/supplier";
+import {
+  PageContainer,
+  PageHeader,
+  KpiGrid,
+  KpiCard,
+  SectionCard,
+  SearchInput,
+  Pagination,
+} from "../../components/Common";
 import "./Supplier.css";
 
 const EMPTY_FORM = {
@@ -2130,136 +2139,148 @@ const Supplier = () => {
   };
 
   return (
-    <div className="dash-page sup-page">
-
+    <PageContainer className="sup-page">
       {/* ================= HEADER ================= */}
-      <div className="sup-header">
-        <div className="sup-header-info">
-          <div className="sup-eyebrow">
-            <span className="sup-eyebrow-dot" />
-            <span>Vendor Directory</span>
-          </div>
-          <h1 className="sup-title">
-            <BsBuilding size={24} style={{ color: "#4f46e5" }} />
-            <span>Suppliers</span>
-          </h1>
-          <p className="sup-subtitle">
-            Manage your suppliers, track procurement spend, and monitor vendor purchase orders
-          </p>
-        </div>
-
-        <div className="adm-header-actions">
+      <PageHeader
+        title="Suppliers"
+        subtitle="Manage your suppliers, track procurement spend, and monitor vendor purchase orders"
+        icon={<BsBuilding />}
+        actions={
           <button
-            className="sup-btn-primary"
+            type="button"
+            className="adm-btn-primary"
             onClick={() => setModal("new")}
+            title="Add new supplier"
+            aria-label="Add new supplier"
           >
             <BsPlus size={18} />
             <span>Add Supplier</span>
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ================= KPI SUMMARY ================= */}
-      <div className="sup-kpi-grid">
-        {/* Total Suppliers */}
-        <div className="sup-kpi-card">
-          <div className="sup-kpi-top">
-            <span className="sup-kpi-label">Total Suppliers</span>
-            <div className="sup-kpi-icon-wrap sup-kpi-icon-indigo">
-              <BsBuilding size={20} />
-            </div>
-          </div>
-          <div className="sup-kpi-value sup-kpi-value-indigo">
-            {stats && stats.total_suppliers !== undefined && stats.total_suppliers !== null
+      <KpiGrid columns={5} ariaLabel="Supplier Summary Indicators">
+        <KpiCard
+          title="Total Suppliers"
+          value={
+            stats && stats.total_suppliers !== undefined && stats.total_suppliers !== null
               ? Number(stats.total_suppliers).toLocaleString("en-IN")
               : Array.isArray(suppliers) && suppliers.length > 0
               ? suppliers.length.toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "0"}
-          </div>
-        </div>
+              : "0"
+          }
+          subtitle="Registered vendors"
+          subtitleColor="#64748b"
+          icon={<BsBuilding />}
+          accentColor="#6366f1"
+          valueColor="#4338ca"
+          loading={statsLoading}
+          active={statusFilter === "all"}
+          tooltip="Show all suppliers"
+          onClick={() => {
+            setStatusFilter("all");
+            setPage(1);
+          }}
+        />
 
-        {/* Active Suppliers */}
-        <div className="sup-kpi-card">
-          <div className="sup-kpi-top">
-            <span className="sup-kpi-label">Active Suppliers</span>
-            <div className="sup-kpi-icon-wrap sup-kpi-icon-emerald">
-              <BsCheckCircle size={20} />
-            </div>
-          </div>
-          <div className="sup-kpi-value sup-kpi-value-emerald">
-            {stats && stats.active_suppliers !== undefined && stats.active_suppliers !== null
+        <KpiCard
+          title="Active Suppliers"
+          value={
+            stats && stats.active_suppliers !== undefined && stats.active_suppliers !== null
               ? Number(stats.active_suppliers).toLocaleString("en-IN")
               : Array.isArray(suppliers) && suppliers.length > 0
               ? suppliers.filter(isSupplierActive).length.toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "0"}
-          </div>
-        </div>
+              : "0"
+          }
+          subtitle="Click to filter active"
+          subtitleColor="#059669"
+          icon={<BsCheckCircle />}
+          accentColor="#10b981"
+          valueColor="#059669"
+          loading={statsLoading}
+          active={statusFilter === "active"}
+          tooltip="Click to filter active suppliers"
+          onClick={() => {
+            setStatusFilter("active");
+            setPage(1);
+          }}
+        />
 
-        {/* Inactive Suppliers */}
-        <div className="sup-kpi-card">
-          <div className="sup-kpi-top">
-            <span className="sup-kpi-label">Inactive Suppliers</span>
-            <div className="sup-kpi-icon-wrap sup-kpi-icon-slate">
-              <BsXCircle size={20} />
-            </div>
-          </div>
-          <div className="sup-kpi-value sup-kpi-value-slate">
-            {stats && stats.inactive_suppliers !== undefined && stats.inactive_suppliers !== null
+        <KpiCard
+          title="Inactive Suppliers"
+          value={
+            stats && stats.inactive_suppliers !== undefined && stats.inactive_suppliers !== null
               ? Number(stats.inactive_suppliers).toLocaleString("en-IN")
               : Array.isArray(suppliers) && suppliers.length > 0
               ? suppliers.filter((s) => !isSupplierActive(s)).length.toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "0"}
-          </div>
-        </div>
+              : "0"
+          }
+          subtitle="Click to filter inactive"
+          subtitleColor="#64748b"
+          icon={<BsXCircle />}
+          accentColor="#64748b"
+          valueColor="#475569"
+          loading={statsLoading}
+          active={statusFilter === "inactive"}
+          tooltip="Click to filter inactive suppliers"
+          onClick={() => {
+            setStatusFilter("inactive");
+            setPage(1);
+          }}
+        />
 
-        {/* Total Spend */}
-        <div className="sup-kpi-card">
-          <div className="sup-kpi-top">
-            <span className="sup-kpi-label">Total Spend</span>
-            <div className="sup-kpi-icon-wrap sup-kpi-icon-blue">
-              <BsCurrencyRupee size={20} />
-            </div>
-          </div>
-          <div className="sup-kpi-value sup-kpi-value-blue" style={{ fontSize: 22 }}>
-            {stats && (stats.total_spend !== undefined || stats.total_procurement_spend !== undefined)
+        <KpiCard
+          title="Total Spend"
+          value={
+            stats && (stats.total_spend !== undefined || stats.total_procurement_spend !== undefined)
               ? formatCurrency(stats.total_spend ?? stats.total_procurement_spend)
               : statsLoading
               ? "..."
-              : "₹0.00"}
-          </div>
-        </div>
+              : "₹0.00"
+          }
+          subtitle="Procurement expenditure"
+          subtitleColor="#64748b"
+          icon={<BsCurrencyRupee />}
+          accentColor="#2563eb"
+          valueColor="#1d4ed8"
+          loading={statsLoading}
+          tooltip="Total procurement spend"
+        />
 
-        {/* Pending Orders */}
-        <div className="sup-kpi-card">
-          <div className="sup-kpi-top">
-            <span className="sup-kpi-label">Pending Orders</span>
-            <div className="sup-kpi-icon-wrap sup-kpi-icon-amber">
-              <BsHourglassSplit size={20} />
-            </div>
-          </div>
-          <div className="sup-kpi-value sup-kpi-value-amber">
-            {stats && (stats.pending_orders_count !== undefined || stats.pending_orders !== undefined)
+        <KpiCard
+          title="Pending Orders"
+          value={
+            stats && (stats.pending_orders_count !== undefined || stats.pending_orders !== undefined)
               ? Number(stats.pending_orders_count ?? stats.pending_orders).toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "0"}
-          </div>
-        </div>
-      </div>
+              : "0"
+          }
+          subtitle="Open purchase orders"
+          subtitleColor="#d97706"
+          icon={<BsHourglassSplit />}
+          accentColor="#f59e0b"
+          valueColor="#d97706"
+          loading={statsLoading}
+          tooltip="Pending supplier orders"
+        />
+      </KpiGrid>
 
       {/* Top Suppliers (displayed if returned by API) */}
       {Array.isArray(stats?.top_suppliers) && stats.top_suppliers.length > 0 && (
-        <div className="sup-top-card">
-          <div className="sup-top-header">
-            <span className="sup-top-badge">🏆 Top Suppliers</span>
-            <span className="sup-top-subtitle">Highest volume vendors by order volume and total procurement spend</span>
-          </div>
+        <SectionCard
+          title="Top Suppliers"
+          subtitle="Highest volume vendors by order volume and total procurement spend"
+          icon={<BsBuilding />}
+          iconVariant="yellow"
+        >
           <div className="sup-top-chips">
             {stats.top_suppliers.map((ts, idx) => (
               <div
@@ -2289,22 +2310,28 @@ const Supplier = () => {
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* ================= SEARCH & TOOLBAR ================= */}
-      <div className="sup-toolbar">
+      <SectionCard
+        title="Search & Filter Suppliers"
+        subtitle="Search vendors by name, contact person, or email and filter by status"
+        icon={<BsFilter />}
+        iconVariant="blue"
+      >
         <div className="sup-toolbar-left">
-          <div className="sup-search-wrapper">
-            <BsSearch className="sup-search-icon" size={14} />
-            <input
-              className="sup-search-input"
+          <div className="sup-search-input-container">
+            <SearchInput
+              className="sup-search-input-wrap"
               placeholder="Search by name, contact and email..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
+              icon={<BsSearch size={14} />}
+              aria-label="Search suppliers"
             />
             {search && (
               <button
@@ -2314,6 +2341,7 @@ const Supplier = () => {
                   setPage(1);
                 }}
                 title="Clear search"
+                aria-label="Clear search"
                 type="button"
               >
                 ✕
@@ -2327,7 +2355,11 @@ const Supplier = () => {
               <select
                 className="sup-filter-select"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1);
+                }}
+                aria-label="Filter suppliers by status"
               >
                 <option value="all">All Statuses</option>
                 <option value="active">Active Only</option>
@@ -2337,7 +2369,7 @@ const Supplier = () => {
 
             {(search || statusFilter !== "all") && (
               <button
-                className="sup-btn-reset"
+                className="adm-btn-secondary sup-btn-reset-common"
                 onClick={handleResetFilters}
                 title="Reset all search & filters"
                 type="button"
@@ -2348,12 +2380,18 @@ const Supplier = () => {
             )}
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* ================= TABLE ================= */}
-      <div className="sup-table-card">
-        <div className="sup-table-responsive">
-          <table className="sup-table">
+      <SectionCard
+        title="Suppliers Directory"
+        subtitle={`Showing ${filteredSuppliers.length} ${filteredSuppliers.length === 1 ? "supplier" : "suppliers"}`}
+        icon={<BsBuilding />}
+        iconVariant="blue"
+        className="sup-table-card"
+      >
+        <div className="sup-table-responsive dashboard-table-wrap">
+          <table className="sup-table dashboard-table">
             <thead>
               <tr>
                 <th style={{ width: "24%" }}>Supplier</th>
@@ -2448,8 +2486,8 @@ const Supplier = () => {
 
                       <td style={{ width: "120px", minWidth: "110px", whiteSpace: "nowrap" }}>
                         <span
-                          className={`sup-badge ${
-                            active ? "sup-badge-active" : "sup-badge-inactive"
+                          className={`status-pill sup-badge ${
+                            active ? "status-badge-success sup-badge-active" : "status-badge-danger sup-badge-inactive"
                           } sup-badge-clickable`}
                           onClick={() => handleToggleStatus(supplier)}
                           title={`Click to switch status to ${active ? "Inactive" : "Active"}`}
@@ -2574,75 +2612,21 @@ const Supplier = () => {
 
         {/* ================= PAGINATION ================= */}
         {!loading && filteredSuppliers.length > 0 && (
-          <div className="sup-pagination">
-            {/* Left: Rows Per Page Dropdown */}
-            <div className="sup-pagination-left">
-              <select
-                className="sup-page-size-select"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-                aria-label="Select rows per page"
-              >
-                <option value={8}>8</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-
-            {/* Center: Record Count Info */}
-            <div className="sup-pagination-center">
-              Showing{" "}
-              <strong>
-                {filteredSuppliers.length === 0 ? 0 : (page - 1) * pageSize + 1}
-              </strong>{" "}
-              to{" "}
-              <strong>
-                {Math.min(filteredSuppliers.length, page * pageSize)}
-              </strong>{" "}
-              of <strong>{filteredSuppliers.length}</strong>{" "}
-              {filteredSuppliers.length === 1 ? "supplier" : "suppliers"}
-            </div>
-
-            {/* Right: Page Numbers (Previous & Next removed) */}
-            <div className="sup-pagination-right">
-              <div className="sup-page-numbers-group">
-                {getPageNumbers().map((p, idx) => {
-                  if (p === "...") {
-                    return (
-                      <span
-                        key={`ellipsis-${idx}`}
-                        className="sup-page-ellipsis"
-                      >
-                        …
-                      </span>
-                    );
-                  }
-                  const isActive = p === page;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      className={`sup-page-btn sup-page-num-btn ${
-                        isActive ? "sup-page-btn--active" : ""
-                      }`}
-                      onClick={() => setPage(p)}
-                      aria-label={`Page ${p}`}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={filteredSuppliers.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+            pageSizeOptions={[8, 10, 20, 50, 100]}
+            itemLabel={filteredSuppliers.length === 1 ? "supplier" : "suppliers"}
+          />
         )}
-      </div>
+      </SectionCard>
 
       {/* ================= MODAL ================= */}
       {modal && (
@@ -2686,7 +2670,7 @@ const Supplier = () => {
           onToggleStatus={handleToggleStatus}
         />
       )}
-    </div>
+    </PageContainer>
   );
 };
 

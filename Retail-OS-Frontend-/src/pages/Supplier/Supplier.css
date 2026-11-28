@@ -4,23 +4,50 @@
    ========================================================= */
 
 .sup-page {
-  width: 100% !important;
-  max-width: 100% !important;
-  margin: 0 !important;
-  padding: 16px 20px 24px !important;
-  box-sizing: border-box !important;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background-color: #f8fafc;
 }
 
-@media (max-width: 768px) {
-  .sup-page {
-    padding: 14px 12px 20px !important;
-  }
+.sup-search-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 280px;
+  min-width: 220px;
 }
 
-@media (max-width: 480px) {
-  .sup-page {
-    padding: 12px 10px 18px !important;
-  }
+.sup-search-input-wrap {
+  width: 100%;
+}
+
+.sup-search-input-wrap .search-input-field {
+  height: 38px;
+  padding-right: 32px;
+  font-size: 13px;
+}
+
+.sup-btn-reset-common {
+  height: 38px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.sup-table-responsive {
+  width: 100%;
+  max-height: 600px;
+  overflow-x: auto;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.sup-table-responsive thead th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 2;
 }
 
 .sup-page * {

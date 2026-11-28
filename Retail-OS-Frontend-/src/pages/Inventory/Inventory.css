@@ -7,14 +7,217 @@
 /* =========================================================
    1. MAIN LAYOUT & CONTAINER
    ========================================================= */
-.inv-page {
-    width: 100%;
-    min-height: 100vh;
-    padding: 16px 20px 24px;
+main:has(.inv-page) {
+    overflow-x: hidden !important;
+    min-width: 0 !important;
+}
+
+.inv-page,
+.inv-page.dashboard-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 100%;
+    padding: 16px 24px 28px !important;
     background: #f8fafc;
     color: #0f172a;
     box-sizing: border-box;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow-x: hidden !important;
+}
+
+.inv-page .dashboard-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.inv-page .dashboard-card > div {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.inv-search-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.inv-filter-search .search-input-field {
+    padding-right: 30px !important;
+}
+
+.inv-search-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: #e2e8f0;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.inv-search-clear-btn:hover {
+    background: #cbd5e1;
+    color: #0f172a;
+}
+
+.inv-spin-icon {
+    animation: inv-spin 0.8s linear infinite;
+}
+
+/* Status Quick Filter Tabs inside Stock Overview Card Header */
+.inv-status-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.inv-status-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.inv-status-tab:hover:not(.active) {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.inv-status-tab.active {
+    background: #ffffff;
+    color: #4f46e5;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.inv-status-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #eef2ff;
+    color: #4f46e5;
+}
+
+.inv-status-tab-count.low {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.inv-status-tab-count.out {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+/* Filter Search & Action Buttons alignment */
+.inv-filter-search.search-input-wrap {
+    width: 100%;
+}
+
+.inv-filter-search .search-input-field {
+    height: 38px;
+    font-size: 13px;
+}
+
+.inv-filter-action-btn {
+    height: 38px;
+    padding: 0 14px;
+    white-space: nowrap;
+}
+
+/* Inventory Table Action Buttons */
+.inventory-action-buttons {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.inventory-action-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
+.inventory-action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.inventory-action-view:hover {
+    color: #4f46e5;
+    border-color: #c7d2fe;
+    background: #eef2ff;
+}
+
+.inventory-action-add:hover {
+    color: #059669;
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+}
+
+.inventory-action-stock-in:hover {
+    color: #2563eb;
+    border-color: #bfdbfe;
+    background: #eff6ff;
+}
+
+.inventory-action-stock-out:hover {
+    color: #d97706;
+    border-color: #fde68a;
+    background: #fffbeb;
+}
+
+.inventory-action-transfer:hover {
+    color: #7c3aed;
+    border-color: #ddd6fe;
+    background: #f5f3ff;
+}
+
+.inv-empty-state {
+    padding: 40px 20px;
+    text-align: center;
 }
 
 .inv-page * {
@@ -128,9 +331,9 @@
 .inv-kpi-card {
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 12px 14px;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
@@ -145,8 +348,8 @@
 }
 
 .inv-kpi-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
     border-color: #cbd5e1;
 }
 
@@ -162,16 +365,19 @@
 }
 
 .inv-kpi-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    text-transform: none;
+    letter-spacing: 0;
+    margin: 0 0 2px 0;
     line-height: 1.35;
     min-width: 0;
     max-width: 100%;
     word-break: break-word;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .inv-kpi-icon-wrap {
@@ -191,16 +397,18 @@
 }
 
 .inv-kpi-value {
-    font-size: clamp(16px, 1.4vw, 22px);
-    font-weight: 800;
-    color: #0f172a;
-    margin: 0;
-    letter-spacing: -0.02em;
+    font-size: 23px;
+    font-weight: 700;
+    color: #334155;
+    margin: 0 0 3px 0;
+    letter-spacing: -0.5px;
     white-space: nowrap;
-    line-height: 1.25;
+    line-height: 1.15;
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Specific responsive rules for Inventory Valuation / Value box */
@@ -256,7 +464,7 @@
     margin-bottom: 14px;
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 10px;
+    border-radius: 12px;
     box-sizing: border-box;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     overflow: hidden;
@@ -273,12 +481,12 @@
 
 .inv-section-title {
     margin: 0;
-    font-size: 14px;
+    font-size: 15px;
     line-height: 20px;
     font-weight: 700;
     color: #0f172a;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 .inv-section-description {
@@ -384,13 +592,13 @@
 .inv-page .inv-filter-card .filter-group input,
 .inv-page .inv-filter-card .filter-group select {
     width: 100%;
-    height: 38px;
-    padding: 0 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
     background: #ffffff;
     color: #1e293b;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 500;
     outline: none;
     box-sizing: border-box;
@@ -434,7 +642,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    height: 38px;
+    height: 36px;
     flex-wrap: nowrap;
 }
 
@@ -443,15 +651,15 @@
 .inv-page .inv-filter-card .clear-btn,
 .inv-page .inv-filter-card .reset-btn,
 .inv-page .inv-filter-card .export-btn {
-    height: 38px;
-    min-height: 38px;
-    padding: 0 13px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 14px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    border-radius: 7px;
-    font-size: 12px;
+    border-radius: 8px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
@@ -461,18 +669,18 @@
 
 .inv-page .inv-filter-card .filter-btn,
 .inv-page .inv-filter-card .search-btn {
-    background: #4f46e5;
-    border: 1px solid #4338ca;
+    background: #2563eb;
+    border: 1px solid #1d4ed8;
     color: #ffffff;
-    box-shadow: 0 1px 2px rgba(79, 70, 229, 0.15);
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15);
 }
 
 .inv-page .inv-filter-card .filter-btn:hover:not(:disabled),
 .inv-page .inv-filter-card .search-btn:hover:not(:disabled) {
-    background: #4338ca;
-    border-color: #3730a3;
+    background: #1d4ed8;
+    border-color: #1e40af;
     transform: translateY(-1px);
-    box-shadow: 0 3px 8px rgba(79, 70, 229, 0.25);
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
 }
 
 .inv-page .inv-filter-card .clear-btn,
@@ -659,14 +867,14 @@
 
 .inv-page .add-product-btn {
     color: #ffffff !important;
-    background: #4f46e5 !important;
-    border-color: #4338ca !important;
-    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3) !important;
+    background: #2563eb !important;
+    border-color: #1d4ed8 !important;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3) !important;
 }
 
 .inv-page .add-product-btn:hover {
-    background: #4338ca !important;
-    box-shadow: 0 3px 8px rgba(79, 70, 229, 0.35) !important;
+    background: #1d4ed8 !important;
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.35) !important;
     transform: translateY(-1px) !important;
 }
 
@@ -751,9 +959,9 @@
 }
 
 .inv-page .inventory-tabs button.active-tab {
-    color: #4f46e5 !important;
-    background: #eef2ff !important;
-    border-color: #c7d2fe !important;
+    color: #2563eb !important;
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
     font-weight: 700 !important;
 }
 
@@ -764,12 +972,12 @@
     border-radius: 10px !important;
     font-size: 10px !important;
     font-weight: 700 !important;
-    color: #4f46e5 !important;
+    color: #2563eb !important;
     background: #ffffff !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border: 1px solid #c7d2fe !important;
+    border: 1px solid #bfdbfe !important;
 }
 
 /* =========================================================
@@ -809,13 +1017,38 @@
 .inv-page .inventory-table-container {
     width: 100% !important;
     max-width: 100% !important;
+    max-height: 440px !important;
     padding: 0 !important;
-    overflow: visible !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    display: block !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: #94a3b8 #f1f5f9 !important;
+}
+
+.inv-page .inventory-table-container::-webkit-scrollbar {
+    width: 8px !important;
+    height: 10px !important;
+}
+
+.inv-page .inventory-table-container::-webkit-scrollbar-track {
+    background: #f1f5f9 !important;
+    border-radius: 6px !important;
+}
+
+.inv-page .inventory-table-container::-webkit-scrollbar-thumb {
+    background: #94a3b8 !important;
+    border-radius: 6px !important;
+    border: 2px solid #f1f5f9 !important;
+}
+
+.inv-page .inventory-table-container::-webkit-scrollbar-thumb:hover {
+    background: #64748b !important;
 }
 
 .inv-page .inventory-table {
-    width: 100% !important;
-    min-width: 1480px !important;
+    width: max-content !important;
+    min-width: 1560px !important;
     border-collapse: collapse !important;
     text-align: left !important;
 }
@@ -1017,8 +1250,8 @@
 }
 
 .inv-page-size-select:focus {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .inv-pagination-center {
@@ -1084,11 +1317,11 @@
 }
 
 .inv-page-btn.active {
-    background: #4f46e5 !important;
-    color: #ffffff !important;
-    border-color: #4f46e5 !important;
+    background: #eff6ff !important;
+    color: #2563eb !important;
+    border-color: #bfdbfe !important;
     font-weight: 700;
-    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
+    box-shadow: none;
 }
 
 .inv-page-btn:disabled {
@@ -1569,4 +1802,92 @@
     .inv-page .inv-filter-card .filter-group input.inventory-search-input {
         padding-left: 36px !important;
     }
+}
+
+/* =========================================================
+   11. DASHBOARD-ALIGNED STATUS PILLS
+   Matches Dashboard's .status-pill design system exactly.
+   ========================================================= */
+.inv-page .status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-transform: capitalize;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+
+.inv-page .status-pill.in-stock,
+.inv-page .status-pill.instock,
+.inv-page .status-pill.active,
+.inv-page .status-pill.completed,
+.inv-page .status-pill.paid,
+.inv-page .status-pill.confirmed {
+    background-color: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.inv-page .status-pill.out-of-stock,
+.inv-page .status-pill.outofstock,
+.inv-page .status-pill.inactive,
+.inv-page .status-pill.cancelled,
+.inv-page .status-pill.failed,
+.inv-page .status-pill.rejected {
+    background-color: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.inv-page .status-pill.low-stock,
+.inv-page .status-pill.lowstock,
+.inv-page .status-pill.pending,
+.inv-page .status-pill.draft {
+    background-color: #fffbeb;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+
+.inv-page .status-pill.reorder,
+.inv-page .status-pill.reorder-level,
+.inv-page .status-pill.processing,
+.inv-page .status-pill.shipped,
+.inv-page .status-pill.delivered {
+    background-color: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+/* =========================================================
+   12. DASHBOARD-ALIGNED TABLE HEADER OVERRIDES
+   Exactly matches Dashboard .dashboard-table th
+   ========================================================= */
+.inv-page .inventory-table thead th {
+    color: #64748b !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    padding: 10px 14px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background: #f8fafc !important;
+}
+
+/* =========================================================
+   13. KPI SUBTITLE - matches Dashboard .kpi-subtitle
+   ========================================================= */
+.inv-kpi-sub,
+.inv-kpi-subtitle {
+    font-size: 12px;
+    color: #64748b;
+    margin: 0;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

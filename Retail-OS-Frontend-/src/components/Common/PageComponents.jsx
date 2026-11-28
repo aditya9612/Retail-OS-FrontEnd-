@@ -300,3 +300,164 @@ export const DataTable = ({ children, className = '', style = {}, ...props }) =>
         </table>
     </div>
 );
+
+/**
+ * SectionCard — Reusable Dashboard-style card container with optional header
+ */
+export const SectionCard = ({
+    title,
+    subtitle,
+    icon,
+    iconVariant = 'blue',
+    headerActions,
+    children,
+    className = '',
+    bodyClassName = '',
+    style = {},
+    ...props
+}) => (
+    <section className={`dashboard-card ${className}`.trim()} style={style} {...props}>
+        {(title || subtitle || icon || headerActions) && (
+            <div className="dashboard-card-header">
+                <div className="card-title-group">
+                    {icon && (
+                        <div className={`card-header-icon ${iconVariant}`.trim()}>
+                            {icon}
+                        </div>
+                    )}
+                    <div>
+                        {title && <h3 className="card-title">{title}</h3>}
+                        {subtitle && <p className="card-subtitle">{subtitle}</p>}
+                    </div>
+                </div>
+                {headerActions && <div className="section-card-actions">{headerActions}</div>}
+            </div>
+        )}
+        <div className={bodyClassName}>{children}</div>
+    </section>
+);
+
+/**
+ * StatusBadge — Reusable status pill matching Dashboard .status-pill design
+ */
+export const StatusBadge = ({
+    label,
+    variant = 'neutral',
+    className = '',
+    style = {},
+    ...props
+}) => (
+    <span
+        className={`status-pill status-badge-${variant} ${className}`.trim()}
+        style={style}
+        {...props}
+    >
+        {label}
+    </span>
+);
+
+/**
+ * Pagination — Reusable Dashboard-style pagination bar with optional page-size selector
+ */
+export const Pagination = ({
+    page,
+    totalPages,
+    totalItems,
+    pageSize,
+    onPageChange,
+    onPageSizeChange,
+    pageSizeOptions = [8, 15, 25, 50],
+    itemLabel = 'items',
+    className = '',
+}) => {
+    const startItem = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+    const endItem = Math.min(page * pageSize, totalItems);
+
+    const getPages = () => {
+        if (totalPages <= 5) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+        if (page <= 3) {
+            return [1, 2, 3, 4, '...', totalPages];
+        }
+        if (page >= totalPages - 2) {
+            return [1, '...', totalPages - 2, totalPages - 1, totalPages];
+        }
+        return [1, '...', page - 1, page, page + 1, '...', totalPages];
+    };
+
+    return (
+        <div className={`dashboard-pagination common-pagination ${className}`.trim()}>
+            <div className="common-pagination-left">
+                {typeof onPageSizeChange === 'function' && (
+                    <div className="common-page-size-wrap">
+                        <span className="common-page-size-label">Rows:</span>
+                        <select
+                            className="common-page-size-select"
+                            value={pageSize}
+                            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                            aria-label="Select rows per page"
+                        >
+                            {pageSizeOptions.map((opt) => (
+                                <option key={opt} value={opt}>
+                                    {opt}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+                <span className="dashboard-pagination-info">
+                    Showing <strong>{startItem}–{endItem}</strong> of <strong>{totalItems}</strong> {itemLabel}
+                    {totalPages > 0 && (
+                        <>
+                            {' '}&nbsp;|&nbsp; Page <strong>{page}</strong> of <strong>{totalPages}</strong>
+                        </>
+                    )}
+                </span>
+            </div>
+
+            {totalPages > 1 && (
+                <div className="dashboard-pagination-controls">
+                    <button
+                        type="button"
+                        className="adm-btn-secondary dashboard-pagination-nav-btn"
+                        disabled={page <= 1}
+                        onClick={() => onPageChange(page - 1)}
+                        aria-label="Previous page"
+                        title="Previous page"
+                    >
+                        ‹
+                    </button>
+                    {getPages().map((p, idx) =>
+                        p === '...' ? (
+                            <span key={`ellipsis-${idx}`} className="common-pagination-ellipsis">
+                                …
+                            </span>
+                        ) : (
+                            <button
+                                key={p}
+                                type="button"
+                                className={`dashboard-pagination-num-btn ${p === page ? 'active' : ''}`}
+                                onClick={() => onPageChange(p)}
+                                aria-label={`Page ${p}`}
+                                aria-current={p === page ? 'page' : undefined}
+                            >
+                                {p}
+                            </button>
+                        )
+                    )}
+                    <button
+                        type="button"
+                        className="adm-btn-secondary dashboard-pagination-nav-btn"
+                        disabled={page >= totalPages}
+                        onClick={() => onPageChange(page + 1)}
+                        aria-label="Next page"
+                        title="Next page"
+                    >
+                        ›
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};

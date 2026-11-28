@@ -40,6 +40,16 @@ import {
   BsArrowReturnLeft,
 } from "react-icons/bs";
 
+import {
+  PageContainer,
+  PageHeader,
+  KpiGrid,
+  KpiCard,
+  SectionCard,
+  SearchInput,
+  StatusBadge,
+  Pagination,
+} from "../../components/Common";
 import "./PurchaseOrderReturns.css";
 
 // Helper: Format date string for debit note generation
@@ -1535,147 +1545,156 @@ const PurchaseOrderReturns = () => {
     );
 
   return (
-    <div className="purchase-order-returns-page">
+    <PageContainer className="purchase-order-returns-page">
       {/* HEADER */}
-      <div className="purchase-order-returns-header">
-        <div className="por-header-left">
-          <div className="por-eyebrow">
-            <span className="por-eyebrow-dot"></span>
-            Inventory Management &bull; Purchase History
-          </div>
-          <h2>
-            <span className="por-header-icon-wrap" aria-hidden="true">
-              <BsArrowReturnLeft size={18} />
-            </span>
-            Purchase Order Returns
-          </h2>
-          <p>Create, track, and manage purchase order returns and debit notes.</p>
-        </div>
-
-        <button
-          type="button"
-          className="por-btn-create"
-          onClick={() => {
-            setShowCreateForm((current) => {
-              const nextState = !current;
-              if (nextState) {
-                fetchMetadata();
-                setCreateForm((prev) => ({
-                  ...prev,
-                  debit_note_number: generateDebitNoteNumber(),
-                }));
-              }
-              return nextState;
-            });
-            setActionError("");
-            setActionSuccess("");
-          }}
-        >
-          {showCreateForm ? (
-            <>
-              <BsX size={18} />
-              <span>Cancel</span>
-            </>
-          ) : (
-            <>
-              <BsPlus size={18} />
-              <span>Create Return</span>
-            </>
-          )}
-        </button>
-      </div>
+      <PageHeader
+        title="Purchase Order Returns"
+        subtitle="Create, track, and manage purchase order returns and debit notes."
+        icon={<BsArrowReturnLeft />}
+        actions={
+          <button
+            type="button"
+            className={showCreateForm ? "adm-btn-secondary" : "adm-btn-primary"}
+            onClick={() => {
+              setShowCreateForm((current) => {
+                const nextState = !current;
+                if (nextState) {
+                  fetchMetadata();
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    debit_note_number: generateDebitNoteNumber(),
+                  }));
+                }
+                return nextState;
+              });
+              setActionError("");
+              setActionSuccess("");
+            }}
+            title={showCreateForm ? "Cancel creating return" : "Create a new purchase order return"}
+          >
+            {showCreateForm ? (
+              <>
+                <BsX size={18} />
+                <span>Cancel</span>
+              </>
+            ) : (
+              <>
+                <BsPlus size={18} />
+                <span>Create Return</span>
+              </>
+            )}
+          </button>
+        }
+      />
 
       {/* DASHBOARD STATS SUMMARY CARDS */}
-      <div className="purchase-order-returns-stats-grid">
-        <div className="returns-stat-card card-total">
-          <div className="returns-stat-card-top">
-            <span className="returns-stat-card-title">Total Returns</span>
-            <div className="returns-stat-card-icon icon-total">
-              <BsBoxSeam size={16} />
-            </div>
-          </div>
-          <p className="returns-stat-card-value">
-            {statsLoading ? "..." : String(totalCount ?? 0)}
-          </p>
-          <span className="returns-stat-card-sub">Recorded Returns</span>
-        </div>
+      <KpiGrid columns={6} ariaLabel="Purchase Order Returns Summary Indicators">
+        <KpiCard
+          title="Total Returns"
+          value={statsLoading ? "..." : String(totalCount ?? 0)}
+          subtitle="Recorded Returns"
+          subtitleColor="#64748b"
+          icon={<BsBoxSeam />}
+          accentColor="#6366f1"
+          valueColor="#4338ca"
+          loading={statsLoading}
+          active={statusFilter === "all"}
+          tooltip="Show all returns"
+          onClick={() => {
+            setStatusFilter("all");
+            setPage(1);
+          }}
+        />
 
-        <div className="returns-stat-card card-requested">
-          <div className="returns-stat-card-top">
-            <span className="returns-stat-card-title">Requested Returns</span>
-            <div className="returns-stat-card-icon icon-requested">
-              <BsClockHistory size={16} />
-            </div>
-          </div>
-          <p className="returns-stat-card-value">
-            {statsLoading ? "..." : String(requestedCount ?? 0)}
-          </p>
-          <span className="returns-stat-card-sub">Awaiting Approval</span>
-        </div>
+        <KpiCard
+          title="Requested Returns"
+          value={statsLoading ? "..." : String(requestedCount ?? 0)}
+          subtitle="Awaiting Approval"
+          subtitleColor="#d97706"
+          icon={<BsClockHistory />}
+          accentColor="#f59e0b"
+          valueColor="#d97706"
+          loading={statsLoading}
+          active={statusFilter === "requested"}
+          tooltip="Click to filter requested returns"
+          onClick={() => {
+            setStatusFilter("requested");
+            setPage(1);
+          }}
+        />
 
-        <div className="returns-stat-card card-approved">
-          <div className="returns-stat-card-top">
-            <span className="returns-stat-card-title">Approved Returns</span>
-            <div className="returns-stat-card-icon icon-approved">
-              <BsCheckCircle size={16} />
-            </div>
-          </div>
-          <p className="returns-stat-card-value">
-            {statsLoading ? "..." : String(approvedCount ?? 0)}
-          </p>
-          <span className="returns-stat-card-sub">Ready to Complete</span>
-        </div>
+        <KpiCard
+          title="Approved Returns"
+          value={statsLoading ? "..." : String(approvedCount ?? 0)}
+          subtitle="Ready to Complete"
+          subtitleColor="#2563eb"
+          icon={<BsCheckCircle />}
+          accentColor="#2563eb"
+          valueColor="#1d4ed8"
+          loading={statsLoading}
+          active={statusFilter === "approved"}
+          tooltip="Click to filter approved returns"
+          onClick={() => {
+            setStatusFilter("approved");
+            setPage(1);
+          }}
+        />
 
-        <div className="returns-stat-card card-completed">
-          <div className="returns-stat-card-top">
-            <span className="returns-stat-card-title">Completed Returns</span>
-            <div className="returns-stat-card-icon icon-completed">
-              <BsCheck2All size={18} />
-            </div>
-          </div>
-          <p className="returns-stat-card-value">
-            {statsLoading ? "..." : String(completedCount ?? 0)}
-          </p>
-          <span className="returns-stat-card-sub">Debit Notes Issued</span>
-        </div>
+        <KpiCard
+          title="Completed Returns"
+          value={statsLoading ? "..." : String(completedCount ?? 0)}
+          subtitle="Debit Notes Issued"
+          subtitleColor="#059669"
+          icon={<BsCheck2All />}
+          accentColor="#10b981"
+          valueColor="#059669"
+          loading={statsLoading}
+          active={statusFilter === "completed"}
+          tooltip="Click to filter completed returns"
+          onClick={() => {
+            setStatusFilter("completed");
+            setPage(1);
+          }}
+        />
 
-        <div className="returns-stat-card card-rejected">
-          <div className="returns-stat-card-top">
-            <span className="returns-stat-card-title">Rejected Returns</span>
-            <div className="returns-stat-card-icon icon-rejected">
-              <BsXCircle size={16} />
-            </div>
-          </div>
-          <p className="returns-stat-card-value">
-            {statsLoading ? "..." : String(rejectedCount ?? 0)}
-          </p>
-          <span className="returns-stat-card-sub">Declined Returns</span>
-        </div>
+        <KpiCard
+          title="Rejected Returns"
+          value={statsLoading ? "..." : String(rejectedCount ?? 0)}
+          subtitle="Declined Returns"
+          subtitleColor="#dc2626"
+          icon={<BsXCircle />}
+          accentColor="#ef4444"
+          valueColor="#dc2626"
+          loading={statsLoading}
+          active={statusFilter === "rejected"}
+          tooltip="Click to filter rejected returns"
+          onClick={() => {
+            setStatusFilter("rejected");
+            setPage(1);
+          }}
+        />
 
-        <div className="returns-stat-card card-amount">
-          <div className="returns-stat-card-top">
-            <span className="returns-stat-card-title">Total Debit Amount</span>
-            <div className="returns-stat-card-icon icon-amount">
-              <BsReceipt size={16} />
-            </div>
-          </div>
-          <p className="returns-stat-card-value" style={{ fontSize: 20 }}>
-            {statsLoading ? "..." : formatCurrency(totalAmountVal)}
-          </p>
-          <span className="returns-stat-card-sub">Cumulative Debit (INR)</span>
-        </div>
-      </div>
+        <KpiCard
+          title="Total Debit Amount"
+          value={statsLoading ? "..." : formatCurrency(totalAmountVal)}
+          subtitle="Cumulative Debit (INR)"
+          subtitleColor="#64748b"
+          icon={<BsReceipt />}
+          accentColor="#7c3aed"
+          valueColor="#6d28d9"
+          loading={statsLoading}
+          tooltip="Total cumulative debit amount"
+        />
+      </KpiGrid>
 
       {/* TOP RETURN REASONS SECTION */}
       {Array.isArray(stats?.top_reasons) && stats.top_reasons.length > 0 && (
-        <div className="purchase-order-returns-top-reasons">
-          <div className="top-reasons-header">
-            <h4>Top Return Reasons</h4>
-            <span className="top-reasons-count-tag">
-              {stats.top_reasons.length} {stats.top_reasons.length === 1 ? "Reason Reported" : "Reasons Reported"}
-            </span>
-          </div>
-
+        <SectionCard
+          title="Top Return Reasons"
+          subtitle={`${stats.top_reasons.length} ${stats.top_reasons.length === 1 ? "Reason Reported" : "Reasons Reported"}`}
+          icon={<BsReceipt />}
+          iconVariant="yellow"
+        >
           <div className="top-reasons-list">
             {stats.top_reasons.map((item, idx) => (
               <div key={idx} className="top-reason-item">
@@ -1697,7 +1716,7 @@ const PurchaseOrderReturns = () => {
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* CREATE RETURN MODAL / FORM */}
@@ -2017,19 +2036,23 @@ const PurchaseOrderReturns = () => {
       )}
 
       {/* ── UNIFIED PROFESSIONAL SEARCH & FILTER SECTION ── */}
-      <div className="purchase-order-returns-filter-card">
-        {/* SEARCH & FILTER CONTROLS */}
+      <SectionCard
+        title="Search & Filter Returns"
+        subtitle="Search by return number, debit note, PO number, reason or supplier"
+        icon={<BsFilter />}
+        iconVariant="blue"
+      >
         <div className="por-filter-row purchase-order-returns-filters">
-          <div className="por-filter-search-wrap purchase-order-returns-search">
-            <BsSearch className="por-search-icon" size={14} />
-            <input
-              type="text"
+          <div className="por-search-input-container">
+            <SearchInput
+              className="por-search-input-wrap"
               placeholder="Search by Return Number, Debit Note, PO Number, Reason, Supplier..."
               value={searchTerm}
               onChange={(event) => {
                 setSearchTerm(event.target.value);
                 setPage(1);
               }}
+              icon={<BsSearch size={14} />}
               aria-label="Search returns"
             />
             {searchTerm && (
@@ -2095,7 +2118,7 @@ const PurchaseOrderReturns = () => {
             {(searchTerm || selectedStoreId || statusFilter !== "all") && (
               <button
                 type="button"
-                className="por-btn-reset-filters"
+                className="adm-btn-secondary por-btn-reset-common"
                 onClick={() => {
                   setSearchTerm("");
                   setSelectedStoreId("");
@@ -2108,14 +2131,9 @@ const PurchaseOrderReturns = () => {
                 <span>Reset</span>
               </button>
             )}
-
-            <div className="por-directory-tag" title="Purchase Order Returns Directory">
-              <span className="por-dir-dot"></span>
-              <span>Purchase Return Directory</span>
-            </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* LOOKUP ERROR BANNER WITH RETRY */}
       {lookupError && (
@@ -2264,7 +2282,7 @@ const PurchaseOrderReturns = () => {
                 Returned Items ({lookupResult.items.length})
               </h5>
               <div className="purchase-order-returns-table-wrapper">
-                <table className="purchase-order-returns-table">
+                <table className="purchase-order-returns-table dashboard-table">
                   <thead>
                     <tr>
                       <th>Product</th>
@@ -2343,8 +2361,14 @@ const PurchaseOrderReturns = () => {
       )}
 
       {/* RETURNS TABLE CARD WITH INTEGRATED PAGINATION */}
-      <div className="por-table-card">
-        <div className="purchase-order-returns-table-wrapper custom-scrollbar">
+      <SectionCard
+        title="Purchase Return Directory"
+        subtitle={`Showing ${effectiveTotal} ${effectiveTotal === 1 ? "return record" : "return records"}`}
+        icon={<BsArrowReturnLeft />}
+        iconVariant="blue"
+        className="por-table-card"
+      >
+        <div className="purchase-order-returns-table-wrapper dashboard-table-wrap custom-scrollbar">
           {loading ? (
             <div className="purchase-order-returns-message">
               <BsArrowRepeat className="animate-spin" size={24} style={{ marginBottom: 8, color: "#6366f1" }} />
@@ -2373,7 +2397,7 @@ const PurchaseOrderReturns = () => {
               )}
             </div>
           ) : (
-            <table className="purchase-order-returns-table">
+            <table className="purchase-order-returns-table dashboard-table">
               <thead>
                 <tr>
                   <th style={{ width: 150 }}>Return Number</th>
@@ -2453,10 +2477,25 @@ const PurchaseOrderReturns = () => {
                       </td>
 
                       <td style={{ textAlign: "center" }}>
-                        <span className={"por-status-badge por-status-" + itemStatus}>
-                          <span className="por-status-dot"></span>
-                          {item.status || "-"}
-                        </span>
+                        <StatusBadge
+                          variant={
+                            itemStatus === "completed"
+                              ? "success"
+                              : itemStatus === "approved"
+                              ? "info"
+                              : itemStatus === "requested"
+                              ? "warning"
+                              : itemStatus === "rejected"
+                              ? "danger"
+                              : "neutral"
+                          }
+                          label={
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                              <span className="por-status-dot" />
+                              <span>{item.status || "-"}</span>
+                            </span>
+                          }
+                        />
                       </td>
 
                       <td style={{ textAlign: "right" }}>
@@ -2592,69 +2631,20 @@ const PurchaseOrderReturns = () => {
         </div>
 
         {/* PAGINATION INTEGRATED IN TABLE CARD FOOTER */}
-        <div className="purchase-order-returns-pagination">
-          <div className="por-pagination-left">
-            <div className="por-page-size-wrap">
-              <select
-                id="por-page-size"
-                className="por-page-size-select"
-                value={pageSize}
-                onChange={(e) => {
-                  const newSize = Number(e.target.value);
-                  setPageSize(newSize);
-                  setPage(1);
-                }}
-                disabled={loading}
-                aria-label="Select rows per page"
-              >
-                <option value={8}>8</option>
-                <option value={15}>15</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="por-pagination-info">
-            Showing{" "}
-            <strong className="por-pagination-highlight">
-              {effectiveTotal === 0 ? "0" : `${rangeStart}–${rangeEnd}`}
-            </strong>{" "}
-            of{" "}
-            <strong className="por-pagination-highlight">
-              {effectiveTotal}
-            </strong>{" "}
-            {effectiveTotal === 1 ? "record" : "records"}
-            {effectiveTotalPages > 1 && (
-              <span className="por-pagination-page-indicator">
-                (Page {page} of {effectiveTotalPages})
-              </span>
-            )}
-          </div>
-
-          <div className="por-pagination-controls">
-            {getPageNumbers().map((item, index) =>
-              item === "..." ? (
-                <span key={`ellipsis-${index}`} className="por-pagination-ellipsis">
-                  &hellip;
-                </span>
-              ) : (
-                <button
-                  key={item}
-                  type="button"
-                  className={`por-pagination-num ${page === item ? "active" : ""}`}
-                  disabled={loading}
-                  onClick={() => setPage(item)}
-                  aria-label={`Page ${item}`}
-                  aria-current={page === item ? "page" : undefined}
-                >
-                  {item}
-                </button>
-              )
-            )}
-          </div>
-        </div>
-      </div>
+        <Pagination
+          page={page}
+          totalPages={effectiveTotalPages}
+          totalItems={effectiveTotal}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          pageSizeOptions={[8, 15, 25, 50]}
+          itemLabel={effectiveTotal === 1 ? "record" : "records"}
+        />
+      </SectionCard>
 
       {/* PURCHASE ORDER RETURN DETAILS MODAL / CARD */}
       {(detailsLoading || detailsError || selectedReturn) && (
@@ -2875,7 +2865,7 @@ const PurchaseOrderReturns = () => {
 
               {Array.isArray(selectedReturn.items) && selectedReturn.items.length > 0 ? (
                 <div className="purchase-order-returns-table-wrapper">
-                  <table className="purchase-order-returns-table">
+                  <table className="purchase-order-returns-table dashboard-table">
                     <thead>
                       <tr>
                         <th>Item ID</th>
@@ -2949,7 +2939,7 @@ const PurchaseOrderReturns = () => {
           )}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };
 

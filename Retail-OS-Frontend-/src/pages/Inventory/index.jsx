@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { calculateStockStatus, getItemStock, getItemMinStock } from "../../utils/stockStatus";
 
-import InventoryHeader from "../../components/InventoryHeader";
 import InventoryFilters from "../../components/InventoryFilters";
 import InventoryTable from "../../components/InventoryTable";
+import {
+    PageContainer,
+    PageHeader,
+    KpiGrid,
+    KpiCard,
+    SectionCard,
+    Pagination,
+} from "../../components/Common";
 import "./Inventory.css";
 
 import category from "../../services/categoryService";
@@ -14,14 +21,15 @@ import { getSuppliers } from "../../api/supplierApi";
 import { supplier as supplierService } from "../../services/supplier";
 
 import {
-    BsChevronLeft,
-    BsChevronRight,
     BsBoxSeam,
     BsBoxes,
     BsExclamationTriangle,
     BsXCircle,
     BsCurrencyRupee,
     BsCalendarX,
+    BsArrowRepeat,
+    BsPlusLg,
+    BsFunnel,
 } from "react-icons/bs";
 
 import {
@@ -43,7 +51,7 @@ import {
     clearInventoryCache,
 } from "../../services/inventoryService";
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 /* =========================================================
    FORMAT PRICE
@@ -2123,6 +2131,7 @@ const Inventory = () => {
         useState([]);
 
     const rawInventoryRef = useRef(null);
+    const inventoryRequestIdRef = useRef(0);
     const rawCategoriesRef = useRef(null);
     const inFlightCategoriesPromiseRef = useRef(null);
     const initialLoadRef = useRef(false);
@@ -2412,6 +2421,7 @@ const Inventory = () => {
     ===================================================== */
 
     const fetchInventory = async (overrideStores = null, overrideWarehouses = null, fromCache = false, overrideProducts = null) => {
+        const requestId = ++inventoryRequestIdRef.current;
         let rawData = [];
         let rawLowStockData = [];
         try {
@@ -2444,25 +2454,53 @@ const Inventory = () => {
             if (fromCache && rawInventoryRef.current) {
                 rawData = rawInventoryRef.current.rawData || [];
                 rawLowStockData = rawInventoryRef.current.rawLowStockData || [];
-            } else if (storeInfo.isAll) {
-                // Fetch unscoped global inventory (single request for all stores)
-                const globalInvRes = await listInventory().catch((err) => {
-                    console.error("Global Inventory API Error =>", err);
-                    return null;
-                });
-
-                const globalItems = getArrayFromResponse(globalInvRes);
-                if (Array.isArray(globalItems)) {
-                    rawData = globalItems;
-                }
             } else {
-                // Fetch scoped inventory for valid active store (single request)
-                const scopedInvRes = await listInventory(storeInfo.validStoreId).catch((err) => {
-                    console.error("Scoped Inventory API Error =>", err);
+                const apiParams = {};
+                if (!storeInfo.isAll && storeInfo.validStoreId != null) {
+                    apiParams.store_id = storeInfo.validStoreId;
+                }
+                if (filterCat && filterCat !== "All Categories") {
+                    const matchedCat = categories.find(
+                        (c) =>
+                            String(c?.id) === String(filterCat) ||
+                            String(c?.name).trim().toLowerCase() === String(filterCat).trim().toLowerCase()
+                    );
+                    const numericCatId =
+                        matchedCat?.id != null && /^\d+$/.test(String(matchedCat.id).trim())
+                            ? Number(matchedCat.id)
+                            : (/^\d+$/.test(String(filterCat).trim()) ? Number(filterCat) : null);
+                    if (numericCatId != null && !Number.isNaN(numericCatId)) {
+                        apiParams.category_id = numericCatId;
+                    }
+                }
+                if (search && search.trim()) {
+                    apiParams.search = search.trim();
+                }
+                if (filterStatus === "Low Stock") {
+                    apiParams.low_stock_only = true;
+                }
+
+                const hasParams = Object.keys(apiParams).length > 0;
+                const invRes = await listInventory(hasParams ? apiParams : undefined).catch((err) => {
+                    console.error("Inventory API Error =>", err);
+                    const detail = err?.response?.data?.detail;
+                    const errMsg =
+                        typeof detail === "string"
+                            ? detail
+                            : Array.isArray(detail)
+                            ? detail.map((d) => d?.msg || String(d)).join(", ")
+                            : err?.message || "Failed to load inventory data.";
+                    if (requestId === inventoryRequestIdRef.current) {
+                        setError(errMsg);
+                    }
                     return null;
                 });
 
-                const items = getArrayFromResponse(scopedInvRes);
+                if (requestId !== inventoryRequestIdRef.current) {
+                    return { rawData: [], rawLowStockData: [] };
+                }
+
+                const items = getArrayFromResponse(invRes);
                 if (Array.isArray(items)) {
                     rawData = items;
                 }
@@ -2900,7 +2938,10 @@ const Inventory = () => {
 
                             category_id:
                                 categoryObj?.id ??
-                                categoryId,
+                                categoryId ??
+                                (filterCat !== "All Categories" && /^\d+$/.test(String(filterCat).trim())
+                                    ? Number(filterCat)
+                                    : null),
 
                             brand:
                                 product?.brand ||
@@ -2990,17 +3031,10 @@ const Inventory = () => {
 
                         // 1. Fetch from category.getAll()
                         try {
-                            const response = await category.getAll();
-                            const body = response?.data ?? response;
-                            const list = Array.isArray(body)
-                                ? body
-                                : Array.isArray(body?.data)
-                                ? body.data
-                                : Array.isArray(body?.items)
-                                ? body.items
-                                : Array.isArray(body?.categories)
-                                ? body.categories
-                                : [];
+                            const response = await category
+                                .getAll({ page_size: 100 })
+                                .catch(() => category.getAll());
+                            const list = getArrayFromResponse(response);
                             if (list.length > 0) {
                                 fetched = list;
                             }
@@ -3754,20 +3788,25 @@ const fetchValuation = async () => {
     }, [products, stores, warehouses, categories, suppliers, poSupplierMap, poSupplierNameMap]);
 
     /* =====================================================
-       WAREHOUSE FILTER CHANGE ONLY
+       FILTER CHANGES (WAREHOUSE / CATEGORY / STATUS / SEARCH)
     ===================================================== */
     useEffect(() => {
         if (isInitialMountRef.current) {
             isInitialMountRef.current = false;
             return;
         }
-        if (prevWarehouseFilterRef.current !== filterWarehouse) {
-            prevWarehouseFilterRef.current = filterWarehouse;
+        const timer = setTimeout(() => {
+            setPage(1);
             fetchInventory();
-            fetchLowStock();
-            fetchMovements();
-        }
-    }, [filterWarehouse]);
+            if (prevWarehouseFilterRef.current !== filterWarehouse) {
+                prevWarehouseFilterRef.current = filterWarehouse;
+                fetchLowStock();
+                fetchMovements();
+            }
+        }, search ? 250 : 0);
+
+        return () => clearTimeout(timer);
+    }, [filterWarehouse, filterCat, filterStatus, search]);
 
     /* =====================================================
        REFRESH ALL INVENTORY DATA
@@ -3805,6 +3844,7 @@ const fetchValuation = async () => {
 
     const handleSearch = () => {
         setPage(1);
+        fetchInventory();
     };
 
     /* =====================================================
@@ -3871,15 +3911,32 @@ const fetchValuation = async () => {
                     String(c?.name).trim().toLowerCase() === String(filterCat).trim().toLowerCase()
             );
 
-            const itemCatId = item?.category_id != null ? String(item.category_id) : "";
-            const itemCategoryStr = String(item?.category || item?.category_name || "").trim().toLowerCase();
+            const resolvedItemCatId =
+                item?.category_id ??
+                item?.categoryId ??
+                (typeof item?.category === "object" ? item?.category?.id ?? item?.category?.category_id : null) ??
+                item?.product?.category_id ??
+                null;
+            const itemCatId = resolvedItemCatId != null ? String(resolvedItemCatId).trim() : "";
+            const itemCategoryStr = String(
+                (typeof item?.category === "object"
+                    ? item?.category?.name || item?.category?.category_name
+                    : item?.category) ||
+                item?.category_name ||
+                item?.categoryName ||
+                ""
+            ).trim().toLowerCase();
+
+            const filterCatStr = String(filterCat).trim();
+            const filterCatLower = filterCatStr.toLowerCase();
 
             const matchCat =
                 filterCat === "All Categories" ||
-                (itemCatId && itemCatId === String(filterCat)) ||
-                (selectedCatObj && itemCatId && itemCatId === String(selectedCatObj.id)) ||
+                (itemCatId && itemCatId === filterCatStr) ||
+                (selectedCatObj && itemCatId && Number.isFinite(Number(selectedCatObj.id)) && Number.isFinite(Number(itemCatId)) && Number(selectedCatObj.id) === Number(itemCatId)) ||
+                (selectedCatObj && itemCatId && String(selectedCatObj.id) === itemCatId) ||
                 (selectedCatObj && itemCategoryStr && itemCategoryStr === String(selectedCatObj.name).trim().toLowerCase()) ||
-                (itemCategoryStr && itemCategoryStr === String(filterCat).trim().toLowerCase());
+                (itemCategoryStr && itemCategoryStr === filterCatLower);
 
             const selectedSupplierObj = suppliers.find(
                 (s) =>
@@ -4409,45 +4466,60 @@ if (action === "transfer") {
         {
             label: "Total Products",
             value: (dashboardTotalSkus ?? inventory.length).toLocaleString("en-IN"),
+            subtitle: "All tracked SKUs • Click to view all",
+            subtitleColor: "#64748b",
             icon: <BsBoxSeam />,
-            color: "#4f46e5",
-            bg: "#eef2ff",
+            accentColor: "#6366f1",
+            valueColor: "#4338ca",
+            filterKey: "All",
         },
         {
             label: "Inventory Valuation",
             value: fmt(valuation),
+            subtitle: "Total stock value",
+            subtitleColor: "#64748b",
             icon: <BsCurrencyRupee />,
-            color: "#059669",
-            bg: "#ecfdf5",
+            accentColor: "#10b981",
+            valueColor: "#059669",
             isCurrency: true,
         },
         {
             label: "Available Stock",
             value: (dashboardTotalUnits ?? totalItems).toLocaleString("en-IN"),
+            subtitle: "Units across warehouses",
+            subtitleColor: "#64748b",
             icon: <BsBoxes />,
-            color: "#2563eb",
-            bg: "#eff6ff",
+            accentColor: "#2563eb",
+            valueColor: "#1d4ed8",
         },
         {
             label: "Low Stock",
             value: lowStockCount.toLocaleString("en-IN"),
+            subtitle: "Click to filter low stock",
+            subtitleColor: "#d97706",
             icon: <BsExclamationTriangle />,
-            color: "#d97706",
-            bg: "#fffbeb",
+            accentColor: "#f59e0b",
+            valueColor: "#d97706",
+            filterKey: "Low Stock",
         },
         {
             label: "Out of Stock",
             value: outOfStockCount.toLocaleString("en-IN"),
+            subtitle: "Click to filter out of stock",
+            subtitleColor: "#dc2626",
             icon: <BsXCircle />,
-            color: "#dc2626",
-            bg: "#fef2f2",
+            accentColor: "#ef4444",
+            valueColor: "#dc2626",
+            filterKey: "Out of Stock",
         },
         {
             label: "Expired Products",
             value: expiredProductsCount.toLocaleString("en-IN"),
+            subtitle: "Items past expiry date",
+            subtitleColor: "#e11d48",
             icon: <BsCalendarX />,
-            color: "#e11d48",
-            bg: "#ffe4e6",
+            accentColor: "#e11d48",
+            valueColor: "#be123c",
         },
     ];
 
@@ -4456,393 +4528,214 @@ if (action === "transfer") {
     ===================================================== */
 
     return (
-        <div className="inv-page">
-            <div className="inv-container">
-
-                {/* TOP BAR */}
-
-                <div className="inv-topbar">
-                    <div className="inv-topbar-info">
-                        <h1 className="inv-title">
-                            📦 Stock Management
-                        </h1>
-                        <p className="inv-subtitle">
-                            Monitor real-time warehouse inventory and oversee stock movements
-                        </p>
-                    </div>
-                </div>
-
-                {/* LOADING */}
-
-                {loading && (
-                    <div className="inv-message loading">
-                        <span className="inv-spinner" />
-                        Loading latest inventory data...
-                    </div>
-                )}
-
-                {/* ERROR */}
-
-                {error && (
-                    <div className="inv-message error">
-                        {error}
-                    </div>
-                )}
-
-                {/* KPI */}
-
-                <div className="inv-kpi-grid">
-                    {kpis.map((item) => {
-                        const cardModifier = item.isCurrency
-                            ? "inv-kpi-card-valuation inv-kpi-card-inventory-value"
-                            : `inv-kpi-card-${item.label.toLowerCase().replace(/\s+/g, "-")}`;
-
-                        const valueStr = String(item.value ?? "");
-                        const isCurrency = item.isCurrency || valueStr.includes("₹");
-
-                        let dynamicFontSize = undefined;
-                        if (isCurrency) {
-                            const len = valueStr.length;
-                            if (len >= 17) {
-                                dynamicFontSize = "clamp(10.5px, 0.72vw + 2px, 12.5px)";
-                            } else if (len >= 14) {
-                                dynamicFontSize = "clamp(11.5px, 0.8vw + 2px, 14px)";
-                            } else if (len >= 11) {
-                                dynamicFontSize = "clamp(12.5px, 0.92vw + 2px, 15.5px)";
-                            } else if (len >= 8) {
-                                dynamicFontSize = "clamp(13.5px, 1.05vw + 2px, 17px)";
-                            } else {
-                                dynamicFontSize = "clamp(14.5px, 1.15vw + 2px, 18.5px)";
+        <PageContainer className="inv-page">
+            {/* TOP HEADER */}
+            <PageHeader
+                title="Stock Management"
+                subtitle="Monitor real-time warehouse inventory and oversee stock movements"
+                icon={<BsBoxes />}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            onClick={handleRefresh}
+                            disabled={loading}
+                            title="Refresh inventory data"
+                            aria-label="Refresh inventory data"
+                        >
+                            <BsArrowRepeat size={15} className={loading ? "inv-spin-icon" : ""} />
+                            <span>Refresh</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="adm-btn-primary"
+                            onClick={() =>
+                                setStockModal({
+                                    name: "Add Inventory",
+                                    quantity: 0,
+                                    unit: "Pcs",
+                                    action: "add",
+                                })
                             }
-                        }
+                            title="Add new inventory stock"
+                            aria-label="Add new inventory stock"
+                        >
+                            <BsPlusLg size={13} />
+                            <span>Add Inventory</span>
+                        </button>
+                    </>
+                }
+            />
 
-                        return (
-                            <div
-                                key={item.label}
-                                className={`inv-kpi-card ${cardModifier}`}
-                            >
-                                <div className="inv-kpi-top">
-                                    <span className="inv-kpi-label">{item.label}</span>
-                                    <div
-                                        className="inv-kpi-icon-wrap"
-                                        style={{ color: item.color, background: item.bg }}
-                                    >
-                                        {item.icon}
-                                    </div>
-                                </div>
+            {/* LOADING */}
+            {loading && (
+                <div className="inv-message loading">
+                    <span className="inv-spinner" />
+                    Loading latest inventory data...
+                </div>
+            )}
 
-                                <div
-                                    className={`inv-kpi-value ${isCurrency ? "inv-kpi-value-currency" : ""}`}
-                                    style={dynamicFontSize ? { fontSize: dynamicFontSize } : undefined}
-                                    title={
-                                        typeof item.value === "string" || typeof item.value === "number"
-                                            ? String(item.value)
-                                            : undefined
-                                    }
+            {/* ERROR */}
+            {error && (
+                <div className="inv-message error">
+                    {error}
+                </div>
+            )}
+
+            {/* KPI SUMMARY CARDS */}
+            <KpiGrid columns={6} ariaLabel="Stock Summary Indicators">
+                {kpis.map((item) => {
+                    const isClickable = Boolean(item.filterKey);
+                    const isActive = isClickable && filterStatus === item.filterKey;
+                    return (
+                        <KpiCard
+                            key={item.label}
+                            title={item.label}
+                            value={item.value}
+                            subtitle={item.subtitle}
+                            subtitleColor={item.subtitleColor}
+                            icon={item.icon}
+                            accentColor={item.accentColor}
+                            valueColor={item.valueColor}
+                            active={isActive}
+                            loading={loading && inventory.length === 0}
+                            tooltip={item.subtitle || item.label}
+                            onClick={
+                                isClickable
+                                    ? () => {
+                                          setFilterStatus(item.filterKey);
+                                          setActiveTab(item.filterKey);
+                                          setPage(1);
+                                      }
+                                    : undefined
+                            }
+                        />
+                    );
+                })}
+            </KpiGrid>
+
+            {/* SEARCH & FILTERS */}
+            <SectionCard
+                title="Search & Filter Stock"
+                subtitle="Quickly narrow inventory by product name, SKU, warehouse, category, or stock status."
+                icon={<BsFunnel />}
+                iconVariant="blue"
+            >
+                <InventoryFilters
+                    search={search}
+                    setSearch={(val) => {
+                        setSearch(val);
+                        setPage(1);
+                    }}
+                    inventory={inventory}
+                    stores={stores}
+                    categories={categories}
+                    warehouses={warehouses}
+                    filterWarehouse={filterWarehouse}
+                    setFilterWarehouse={(val) => {
+                        setFilterWarehouse(val);
+                        setPage(1);
+                    }}
+                    filterCat={filterCat}
+                    setFilterCat={(val) => {
+                        setFilterCat(val);
+                        setPage(1);
+                    }}
+                    filterStatus={filterStatus}
+                    setFilterStatus={(val) => {
+                        setFilterStatus(val);
+                        setActiveTab(val);
+                        setPage(1);
+                    }}
+                    onSearch={handleSearch}
+                    onExport={handleExportInventory}
+                />
+            </SectionCard>
+
+            {/* STOCK TABLE CARD */}
+            <SectionCard
+                title="Inventory Stock Overview"
+                subtitle={`Showing ${filtered.length} matching ${filtered.length === 1 ? "item" : "items"} across your stores and warehouses`}
+                icon={<BsBoxSeam />}
+                iconVariant="blue"
+                className="inv-table-card"
+                headerActions={
+                    <div className="inv-status-tabs" role="tablist" aria-label="Quick stock status filter">
+                        {[
+                            { key: "All", label: "All", count: inventory.length },
+                            { key: "Low Stock", label: "Low Stock", count: lowStockCount },
+                            { key: "Out of Stock", label: "Out of Stock", count: outOfStockCount },
+                        ].map((tab) => {
+                            const isActive = filterStatus === tab.key;
+                            return (
+                                <button
+                                    key={tab.key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={isActive}
+                                    className={`inv-status-tab ${isActive ? "active" : ""}`}
+                                    onClick={() => {
+                                        setActiveTab(tab.key);
+                                        setFilterStatus(tab.key);
+                                        setPage(1);
+                                    }}
+                                    title={`Filter by ${tab.label}`}
                                 >
-                                    {item.value}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* FILTERS */}
-
-                <section className="inv-filter-card">
-                    <div className="inv-filter-inner">
-                        <div className="inv-card-heading">
-                            <div>
-                                <h2 className="inv-section-title">
-                                    Inventory Filters
-                                </h2>
-
-                                <p className="inv-section-description">
-                                    Quickly narrow
-                                    inventory by
-                                    product,
-                                    warehouse,
-                                    category,
-                                    supplier or
-                                    stock status.
-                                </p>
-                            </div>
-                        </div>
-
-                        <InventoryFilters
-                            search={
-                                search
-                            }
-                            setSearch={
-                                setSearch
-                            }
-                            inventory={
-                                inventory
-                            }
-                            products={
-                                products
-                            }
-                            stores={
-                                stores
-                            }
-                            categories={
-                                categories
-                            }
-                            warehouses={
-                                warehouses
-                            }
-                            suppliers={
-                                suppliers
-                            }
-                            filterWarehouse={
-                                filterWarehouse
-                            }
-                            setFilterWarehouse={
-                                setFilterWarehouse
-                            }
-                            filterCat={
-                                filterCat
-                            }
-                            setFilterCat={
-                                setFilterCat
-                            }
-                            filterSupplier={
-                                filterSupplier
-                            }
-                            setFilterSupplier={
-                                setFilterSupplier
-                            }
-                            filterStatus={
-                                filterStatus
-                            }
-                            setFilterStatus={
-                                setFilterStatus
-                            }
-                            filterDate={
-                                filterDate
-                            }
-                            setFilterDate={
-                                setFilterDate
-                            }
-                            onSearch={
-                                handleSearch
-                            }
-                            onExport={
-                                handleExportInventory
-                            }
-                        />
+                                    <span>{tab.label}</span>
+                                    <span className={`inv-status-tab-count ${tab.key === "Low Stock" ? "low" : tab.key === "Out of Stock" ? "out" : ""}`}>
+                                        {tab.count}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
-                </section>
+                }
+            >
+                <InventoryTable
+                    paginated={paginated}
+                    stockStatus={stockStatus}
+                    fmt={fmt}
+                    setStockModal={setStockModal}
+                    suppliers={suppliers}
+                    onView={(item) => setViewProductModal(item)}
+                />
 
-                {/* TABLE */}
+                <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    totalItems={filtered.length}
+                    pageSize={pageSize}
+                    onPageChange={setPage}
+                    onPageSizeChange={(newSize) => {
+                        setPageSize(newSize);
+                        setPage(1);
+                    }}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    itemLabel="items"
+                />
+            </SectionCard>
 
-                <section className="inv-card">
-                    <InventoryHeader
-                        totalItems={
-                            inventory.length
-                        }
-                        lowStockCount={
-                            lowStockCount
-                        }
-                        outOfStockCount={
-                            outOfStockCount
-                        }
-                        activeTab={
-                            activeTab
-                        }
-                        setActiveTab={(tab) => {
-                            setActiveTab(tab);
-                            if (tab === "Low Stock") {
-                                setFilterStatus("Low Stock");
-                            } else if (tab === "Out of Stock") {
-                                setFilterStatus("Out of Stock");
-                            } else {
-                                setFilterStatus("All");
-                            }
-                        }}
-                        setStockModal={
-                            setStockModal
-                        }
-                        onRefresh={
-                            handleRefresh
-                        }
-                        loading={
-                            loading
-                        }
-                        onAddProduct={() =>
-                            setStockModal({
-                                name: "Add Inventory",
-                                quantity: 0,
-                                unit: "Pcs",
-                                action: "add",
-                            })
-                        }
-                        onAddInventory={() =>
-                            setStockModal({
-                                name: "Add Inventory",
-                                quantity: 0,
-                                unit: "Pcs",
-                                action: "add",
-                            })
-                        }
-                    />
+            {/* STOCK MODAL */}
+            {stockModal && (
+                <StockUpdateModal
+                    item={stockModal}
+                    products={products}
+                    stores={stores}
+                    inventory={inventory}
+                    onClose={() => setStockModal(null)}
+                    onSave={handleStockUpdate}
+                />
+            )}
 
-                    <div className="inv-table-wrap">
-                        <InventoryTable
-                            paginated={
-                                paginated
-                            }
-                            stockStatus={
-                                stockStatus
-                            }
-                            fmt={fmt}
-                            setStockModal={
-                                setStockModal
-                            }
-                            suppliers={
-                                suppliers
-                            }
-                            onView={(item) =>
-                                setViewProductModal(item)
-                            }
-                        />
-                    </div>
-                
-                    {/* PAGINATION */}
-                    <div className="inv-pagination">
-                        {/* LEFT: Rows per page (dropdown only, label removed) */}
-                        <div className="inv-pagination-left">
-                            <select
-                                id="inv-page-size"
-                                className="inv-page-size-select"
-                                value={pageSize}
-                                onChange={(e) => {
-                                    setPageSize(Number(e.target.value));
-                                    setPage(1);
-                                }}
-                                aria-label="Select rows per page"
-                            >
-                                <option value={8}>8</option>
-                                <option value={15}>15</option>
-                                <option value={25}>25</option>
-                                <option value={50}>50</option>
-                            </select>
-                        </div>
-
-                        {/* CENTER: Pagination Summary Text */}
-                        <div className="inv-pagination-center">
-                            <span className="inv-pagination-info">
-                                Showing{" "}
-                                <strong>
-                                    {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}
-                                    {" – "}
-                                    {Math.min(page * pageSize, filtered.length)}
-                                </strong>{" "}
-                                of <strong>{filtered.length}</strong> items
-                            </span>
-                        </div>
-
-                        {/* RIGHT: Page Buttons */}
-                        <div className="inv-pagination-right">
-                            {totalPages > 1 && (
-                                <div className="inv-page-buttons">
-                                    <button
-                                        type="button"
-                                        className="inv-page-btn"
-                                        disabled={page === 1}
-                                        onClick={() => setPage(page - 1)}
-                                        aria-label="Previous page"
-                                    >
-                                        <BsChevronLeft size={12} />
-                                    </button>
-
-                                    {(() => {
-                                        let pages = [];
-                                        if (totalPages <= 5) {
-                                            pages = Array.from({ length: totalPages }, (_, i) => i + 1);
-                                        } else {
-                                            if (page <= 3) {
-                                                pages = [1, 2, 3, 4, '...', totalPages];
-                                            } else if (page >= totalPages - 2) {
-                                                pages = [1, '...', totalPages - 2, totalPages - 1, totalPages];
-                                            } else {
-                                                pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
-                                            }
-                                        }
-                                        return pages.map((p, idx) => {
-                                            if (p === '...') {
-                                                return (
-                                                    <span key={`ellipsis-${idx}`} className="inv-page-ellipsis">
-                                                        …
-                                                    </span>
-                                                );
-                                            }
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    key={p}
-                                                    className={`inv-page-btn ${p === page ? "active" : ""}`}
-                                                    onClick={() => setPage(p)}
-                                                    aria-label={`Page ${p}`}
-                                                    aria-current={p === page ? "page" : undefined}
-                                                >
-                                                    {p}
-                                                </button>
-                                            );
-                                        });
-                                    })()}
-
-                                    <button
-                                        type="button"
-                                        className="inv-page-btn"
-                                        disabled={page === totalPages}
-                                        onClick={() => setPage(page + 1)}
-                                        aria-label="Next page"
-                                    >
-                                        <BsChevronRight size={12} />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </section>
-
-                {/* STOCK MODAL */}
-
-                {stockModal && (
-                    <StockUpdateModal
-                        item={
-                            stockModal
-                        }
-                        products={
-                            products
-                        }
-                        stores={
-                            stores
-                        }
-                        inventory={
-                            inventory
-                        }
-                        onClose={() =>
-                            setStockModal(
-                                null
-                            )
-                        }
-                        onSave={
-                            handleStockUpdate
-                        }
-                    />
-                )}
-
-                {/* VIEW PRODUCT STORE-WISE STOCK MODAL */}
-                {viewProductModal && (
-                    <ProductStoreStockModal
-                        item={viewProductModal}
-                        onClose={() => setViewProductModal(null)}
-                    />
-                )}
-            </div>
-        </div>
+            {/* VIEW PRODUCT STORE-WISE STOCK MODAL */}
+            {viewProductModal && (
+                <ProductStoreStockModal
+                    item={viewProductModal}
+                    onClose={() => setViewProductModal(null)}
+                />
+            )}
+        </PageContainer>
     );
 };
 
